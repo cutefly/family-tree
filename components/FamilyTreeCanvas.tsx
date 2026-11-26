@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as f3 from "family-chart";
-import "family-chart/dist/styles/family-chart.css";
+import "family-chart/styles/family-chart.css";
 import type { ChildOrderMode, FamilyTree, Marriage, Person } from "@prisma/client";
 import {
   formatPersonDisplayName,
