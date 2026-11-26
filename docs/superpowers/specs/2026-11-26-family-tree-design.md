@@ -58,8 +58,8 @@
 | `id` | String (UUID) | PK | 가계도 ID |
 | `title` | String | Not Null | 가계도 이름 |
 | `ownerId` | String | FK → `User.id` | 소유자 ID |
-| `bonGwanKo` | String? | Nullable | 글로벌 대표 본관 (한글, 예: `김해`) |
-| `bonGwanHanja` | String? | Nullable | 글로벌 대표 본관 (한자, 예: `金海`) |
+| `bonKo` | String? | Nullable | 글로벌 대표 본관 (한글, 예: `김해`) |
+| `bonHanja` | String? | Nullable | 글로벌 대표 본관 (한자, 예: `金海`) |
 | `surnameKo` | String? | Nullable | 글로벌 대표 성씨 (한글, 예: `김`) |
 | `surnameHanja` | String? | Nullable | 글로벌 대표 성씨 (한자, 예: `金`) |
 | `childOrderMode` | Enum | Default `BY_ORDER` | `BY_ORDER` \| `BY_GENDER_THEN_ORDER` |
@@ -78,8 +78,8 @@
 | `nameHanja` | String? | Nullable | 한자 이름 |
 | `surnameKo` | String? | Nullable | 성씨 한글 (예: `김`) |
 | `surnameHanja` | String? | Nullable | 성씨 한자 (예: `金`) |
-| `bonGwanKo` | String? | Nullable | 본관/출생지 한글 (예: `김해`) |
-| `bonGwanHanja` | String? | Nullable | 본관/출생지 한자 (예: `金海`) |
+| `bonKo` | String? | Nullable | 본관/출생지 한글 (예: `김해`) |
+| `bonHanja` | String? | Nullable | 본관/출생지 한자 (예: `金海`) |
 | `gender` | Enum | Not Null | `MALE` \| `FEMALE` \| `OTHER` |
 | `birthDate` | String? | Nullable | 생년월일 (부분 날짜 `YYYY`, `YYYY-MM`, `YYYY-MM-DD` 허용) |
 | `deathDate` | String? | Nullable | 사망일 (부분 날짜 허용) |
@@ -107,9 +107,9 @@
 
 ### 4.1 인물 카드 표시 이름 포맷팅
 1. `nameKo`가 존재하는 경우:
-   - 성씨가 별도로 있으면 `surnameKo + nameKo` 또는 `nameKo` (한자 병기 시 `홍길동 (洪吉童)`). 입력 시 `nameKo`에 성을 포함한 풀네임을 적거나 성/이름을 분리해 일관되게 표시합니다. (기본: `nameKo`에 이름 또는 성명 저장, `surnameKo`/`bonGwanKo`는 본관·성씨 메타데이터로 보관하며, `nameKo`가 없을 때 조합에 사용)
+   - 성씨가 별도로 있으면 `surnameKo + nameKo` 또는 `nameKo` (한자 병기 시 `홍길동 (洪吉童)`). 입력 시 `nameKo`에 성을 포함한 풀네임을 적거나 성/이름을 분리해 일관되게 표시합니다. (기본: `nameKo`에 이름 또는 성명 저장, `surnameKo`/`bonKo`는 본관·성씨 메타데이터로 보관하며, `nameKo`가 없을 때 조합에 사용)
 2. `nameKo`가 없고 `surnameKo`만 존재하는 경우 (배우자 등):
-   - `bonGwanKo`가 함께 있으면: `${bonGwanKo} ${surnameKo}씨` (한자 병기 가능 시 `${bonGwanHanja} ${surnameHanja}氏`)
+   - `bonKo`가 함께 있으면: `${bonKo} ${surnameKo}씨` (한자 병기 가능 시 `${bonHanja} ${surnameHanja}氏`)
    - `surnameKo`만 있으면: `${surnameKo}씨`
 
 ### 4.2 자녀 정렬 규칙 (`childOrderMode`)
@@ -170,7 +170,7 @@
 
 - **단위 테스트 (`lib/__tests__/`)**:
   - `family-graph.test.ts`:
-    - `nameKo` 유무 및 `bonGwanKo`/`surnameKo` 조합 표시 이름 포맷팅 검증
+    - `nameKo` 유무 및 `bonKo`/`surnameKo` 조합 표시 이름 포맷팅 검증
     - `BY_ORDER` vs `BY_GENDER_THEN_ORDER` 자녀 정렬 검증
     - `family-chart` 어댑터의 양방향 `parents`/`children`/`spouses` 생성 검증
   - `validation.test.ts`:
