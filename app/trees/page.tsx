@@ -2,8 +2,11 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { AdminUserAssignmentPanel } from "@/components/AdminUserAssignmentPanel";
 import { ThemeSelector } from "@/components/ThemeSelector";
+
+type EffectiveRole = "ADMIN" | "OWNER" | "EDITOR" | "VIEWER";
 
 interface TreeSummary {
   id: string;
@@ -13,11 +16,27 @@ interface TreeSummary {
   surnameKo: string | null;
   surnameHanja: string | null;
   isShared: boolean;
+  myRole: EffectiveRole;
   _count: { persons: number };
 }
 
+interface CurrentUserInfo {
+  id: string;
+  email: string;
+  name: string;
+  role: "ADMIN" | "USER";
+}
+
+const ROLE_LABELS: Record<EffectiveRole, string> = {
+  ADMIN: "관리자",
+  OWNER: "소유자",
+  EDITOR: "편집자",
+  VIEWER: "열람자",
+};
+
 export default function TreesPage() {
   const router = useRouter();
+  const [currentUser, setCurrentUser] = useState<CurrentUserInfo | null>(null);
   const [trees, setTrees] = useState<TreeSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -27,20 +46,30 @@ export default function TreesPage() {
   const [surnameKo, setSurnameKo] = useState("");
   const [surnameHanja, setSurnameHanja] = useState("");
 
-  useEffect(() => {
-    fetch("/api/trees")
-      .then((res) => {
-        if (res.status === 401) {
-          router.replace("/login");
-          return null;
-        }
-        return res.json();
-      })
-      .then((json) => {
-        if (json?.trees) setTrees(json.trees);
-      })
-      .finally(() => setLoading(false));
+  const loadData = useCallback(async () => {
+    try {
+      const [meRes, treesRes] = await Promise.all([
+        fetch("/api/auth/me"),
+        fetch("/api/trees"),
+      ]);
+      if (meRes.status === 401 || treesRes.status === 401) {
+        router.replace("/login");
+        return;
+      }
+      const [meJson, treesJson] = await Promise.all([
+        meRes.json(),
+        treesRes.json(),
+      ]);
+      if (meJson?.user) setCurrentUser(meJson.user);
+      if (treesJson?.trees) setTrees(treesJson.trees);
+    } finally {
+      setLoading(false);
+    }
   }, [router]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -79,8 +108,10 @@ export default function TreesPage() {
         </div>
       </div>
 
-      <section className="mb-8 rounded-xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-5 shadow-sm">
-        <h2 className="mb-4 text-base font-semibold">새 가계도 만들기</h2>
+      {currentUser?.role === "ADMIN" && (
+        <>
+          <section className="mb-8 rounded-xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-5 shadow-sm">
+            <h2 className="mb-4 text-base font-semibold">새 가계도 만들기</h2>
         <form onSubmit={handleCreate} className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
           <div className="sm:col-span-2">
             <label className="mb-1 block font-medium">가계도 이름</label>
@@ -139,11 +170,18 @@ export default function TreesPage() {
         </form>
         {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
       </section>
+          <AdminUserAssignmentPanel trees={trees} onAssigned={loadData} />
+        </>
+      )}
 
       {loading ? (
         <p className="text-sm text-[var(--text-secondary)]">불러오는 중...</p>
       ) : trees.length === 0 ? (
-        <p className="text-sm text-[var(--text-secondary)]">아직 생성된 가계도가 없습니다.</p>
+        <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-5 text-sm text-[var(--text-secondary)]">
+          {currentUser?.role === "ADMIN"
+            ? "아직 생성된 가계도가 없습니다."
+            : "아직 배정된 가계도가 없습니다. 관리자가 소속 가계와 역할을 설정하면 이용할 수 있습니다."}
+        </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
           {trees.map((tree) => (
@@ -152,11 +190,16 @@ export default function TreesPage() {
               href={`/trees/${tree.id}`}
               className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-5 shadow-sm transition hover:border-blue-500"
             >
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <h3 className="font-semibold">{tree.title}</h3>
-                <span className="rounded bg-[var(--bg-muted)] px-2 py-0.5 text-xs text-[var(--text-secondary)]">
-                  {tree._count.persons}명
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="rounded bg-blue-600/15 px-2 py-0.5 text-xs font-medium text-blue-600">
+                    {ROLE_LABELS[tree.myRole]}
+                  </span>
+                  <span className="rounded bg-[var(--bg-muted)] px-2 py-0.5 text-xs text-[var(--text-secondary)]">
+                    {tree._count.persons}명
+                  </span>
+                </div>
               </div>
               <p className="mt-1 text-sm text-[var(--text-secondary)]">
                 {[

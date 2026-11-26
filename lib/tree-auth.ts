@@ -1,9 +1,17 @@
 import { NextResponse } from "next/server";
-import type { TreeRole } from "@prisma/client";
-import { getCurrentUser } from "@/lib/auth";
+import type { FamilyTree, TreeRole } from "@prisma/client";
+import { getCurrentUser, type CurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export type EffectiveTreeRole = "ADMIN" | TreeRole;
+
+export type AdminAuthResult =
+  | { user: CurrentUser }
+  | { error: NextResponse };
+
+export type TreeAccessResult =
+  | { user: CurrentUser; tree: FamilyTree; role: EffectiveTreeRole }
+  | { error: NextResponse };
 
 const ROLE_RANK: Record<TreeRole, number> = {
   VIEWER: 1,
@@ -11,7 +19,7 @@ const ROLE_RANK: Record<TreeRole, number> = {
   OWNER: 3,
 };
 
-export async function requireAdmin() {
+export async function requireAdmin(): Promise<AdminAuthResult> {
   const user = await getCurrentUser();
   if (!user) {
     return {
@@ -34,7 +42,7 @@ export async function requireAdmin() {
 export async function requireTreeAccess(
   treeId: string,
   minRole: TreeRole = "VIEWER"
-) {
+): Promise<TreeAccessResult> {
   const user = await getCurrentUser();
   if (!user) {
     return {
@@ -53,7 +61,7 @@ export async function requireTreeAccess(
   }
 
   if (user.role === "ADMIN") {
-    return { user, tree, role: "ADMIN" as EffectiveTreeRole };
+    return { user, tree, role: "ADMIN" };
   }
 
   const member = await prisma.treeMember.findUnique({
@@ -67,5 +75,5 @@ export async function requireTreeAccess(
     };
   }
 
-  return { user, tree, role: member.role as EffectiveTreeRole };
+  return { user, tree, role: member.role };
 }

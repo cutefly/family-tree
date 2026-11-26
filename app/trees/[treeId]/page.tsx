@@ -6,21 +6,36 @@ import { useCallback, useEffect, useState } from "react";
 import type { FamilyTree, Marriage, Person } from "@prisma/client";
 import { FamilyTreeCanvas } from "@/components/FamilyTreeCanvas";
 import { ThemeSelector } from "@/components/ThemeSelector";
+import { TreeMembersModal } from "@/components/TreeMembersModal";
 import { TreeSettingsModal } from "@/components/TreeSettingsModal";
 import type { FamilyChartDatum } from "@/lib/family-graph";
+
+type EffectiveRole = "ADMIN" | "OWNER" | "EDITOR" | "VIEWER";
 
 type FullTree = FamilyTree & {
   persons: Person[];
   marriages: Marriage[];
 };
 
+const ROLE_LABELS: Record<EffectiveRole, string> = {
+  ADMIN: "관리자",
+  OWNER: "소유자",
+  EDITOR: "편집자",
+  VIEWER: "열람자",
+};
+
 export default function TreeDetailPage() {
   const params = useParams<{ treeId: string }>();
   const router = useRouter();
   const [tree, setTree] = useState<FullTree | null>(null);
+  const [myRole, setMyRole] = useState<EffectiveRole>("VIEWER");
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [mode, setMode] = useState<"edit" | "view">("edit");
+  const [mode, setMode] = useState<"edit" | "view">("view");
   const [showSettings, setShowSettings] = useState(false);
+  const [showMembers, setShowMembers] = useState(false);
+
+  const canEdit = myRole === "ADMIN" || myRole === "OWNER" || myRole === "EDITOR";
+  const canManage = myRole === "ADMIN" || myRole === "OWNER";
 
   useEffect(() => {
     fetch(`/api/trees/${params.treeId}`)
@@ -38,6 +53,11 @@ export default function TreeDetailPage() {
       })
       .then((json) => {
         if (json?.tree) setTree(json.tree);
+        if (json?.myRole) {
+          const role = json.myRole as EffectiveRole;
+          setMyRole(role);
+          setMode(role === "VIEWER" ? "view" : "edit");
+        }
       })
       .catch(() => {
         setLoadError("가계도를 불러오는 중 네트워크 오류가 발생했습니다.");
@@ -93,39 +113,56 @@ export default function TreeDetailPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="rounded bg-blue-600/15 px-2.5 py-1 text-xs font-medium text-blue-600">
+            {ROLE_LABELS[myRole]}
+          </span>
           <ThemeSelector />
-          <div className="flex overflow-hidden rounded-lg border border-[var(--border-color)]">
-            <button
-              type="button"
-              onClick={() => setMode("edit")}
-              className={`px-3 py-1 ${
-                mode === "edit"
-                  ? "bg-blue-600 text-white"
-                  : "bg-[var(--bg-surface)] text-[var(--text-primary)]"
-              }`}
-            >
-              작성/편집
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode("view")}
-              className={`px-3 py-1 ${
-                mode === "view"
-                  ? "bg-blue-600 text-white"
-                  : "bg-[var(--bg-surface)] text-[var(--text-primary)]"
-              }`}
-            >
-              보기
-            </button>
-          </div>
+          {canEdit && (
+            <div className="flex overflow-hidden rounded-lg border border-[var(--border-color)]">
+              <button
+                type="button"
+                onClick={() => setMode("edit")}
+                className={`px-3 py-1 ${
+                  mode === "edit"
+                    ? "bg-blue-600 text-white"
+                    : "bg-[var(--bg-surface)] text-[var(--text-primary)]"
+                }`}
+              >
+                작성/편집
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode("view")}
+                className={`px-3 py-1 ${
+                  mode === "view"
+                    ? "bg-blue-600 text-white"
+                    : "bg-[var(--bg-surface)] text-[var(--text-primary)]"
+                }`}
+              >
+                보기
+              </button>
+            </div>
+          )}
 
-          <button
-            type="button"
-            onClick={() => setShowSettings(true)}
-            className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-surface)] px-3 py-1 hover:bg-[var(--bg-muted)]"
-          >
-            글로벌 설정 / 공유
-          </button>
+          {canManage && (
+            <button
+              type="button"
+              onClick={() => setShowMembers(true)}
+              className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-surface)] px-3 py-1 hover:bg-[var(--bg-muted)]"
+            >
+              멤버 관리
+            </button>
+          )}
+
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setShowSettings(true)}
+              className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-surface)] px-3 py-1 hover:bg-[var(--bg-muted)]"
+            >
+              {canManage ? "글로벌 설정 / 공유" : "가계도 설정"}
+            </button>
+          )}
         </div>
       </header>
 
@@ -134,16 +171,25 @@ export default function TreeDetailPage() {
           persons={tree.persons}
           marriages={tree.marriages}
           tree={tree}
-          mode={mode}
+          mode={canEdit ? mode : "view"}
           onGraphChange={handleGraphChange}
         />
       </div>
 
-      {showSettings && (
+      {showSettings && canEdit && (
         <TreeSettingsModal
           tree={tree}
+          canManageSharing={canManage}
           onClose={() => setShowSettings(false)}
           onUpdated={(updated) => setTree((prev) => (prev ? { ...prev, ...updated } : prev))}
+        />
+      )}
+
+      {showMembers && canManage && (
+        <TreeMembersModal
+          treeId={tree.id}
+          myRole={myRole}
+          onClose={() => setShowMembers(false)}
         />
       )}
     </div>

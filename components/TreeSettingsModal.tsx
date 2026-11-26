@@ -5,12 +5,14 @@ import type { ChildOrderMode, FamilyTree } from "@prisma/client";
 
 interface TreeSettingsModalProps {
   tree: FamilyTree;
+  canManageSharing?: boolean;
   onClose: () => void;
   onUpdated: (updated: FamilyTree) => void;
 }
 
 export function TreeSettingsModal({
   tree,
+  canManageSharing = true,
   onClose,
   onUpdated,
 }: TreeSettingsModalProps) {
@@ -38,18 +40,22 @@ export function TreeSettingsModal({
     setSaving(true);
     setError(null);
     try {
+      const payload: Record<string, unknown> = {
+        title,
+        bonKo,
+        bonHanja,
+        surnameKo,
+        surnameHanja,
+        childOrderMode,
+      };
+      if (canManageSharing) {
+        payload.isShared = isShared;
+      }
+
       const res = await fetch(`/api/trees/${tree.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title,
-          bonKo,
-          bonHanja,
-          surnameKo,
-          surnameHanja,
-          childOrderMode,
-          isShared,
-        }),
+        body: JSON.stringify(payload),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -173,39 +179,41 @@ export function TreeSettingsModal({
             </select>
           </div>
 
-          <div className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-muted)] p-3">
-            <label className="flex items-center gap-2 font-medium">
-              <input
-                type="checkbox"
-                checked={isShared}
-                onChange={(e) => setIsShared(e.target.checked)}
-              />
-              읽기 전용 공유 링크 활성화
-            </label>
-            {isShared && (
-              <div className="mt-2 flex items-center gap-2">
+          {canManageSharing && (
+            <div className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-muted)] p-3">
+              <label className="flex items-center gap-2 font-medium">
                 <input
-                  readOnly
-                  value={shareUrl}
-                  className="flex-1 rounded border border-[var(--border-color)] bg-[var(--input-bg)] px-2 py-1 text-xs"
+                  type="checkbox"
+                  checked={isShared}
+                  onChange={(e) => setIsShared(e.target.checked)}
                 />
-                <button
-                  type="button"
-                  onClick={handleCopy}
-                  className="rounded bg-blue-600 px-2.5 py-1 text-xs text-white"
-                >
-                  {copied ? "복사됨" : "복사"}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleRegenerateToken}
-                  className="rounded border border-[var(--border-color)] bg-[var(--bg-surface)] px-2.5 py-1 text-xs"
-                >
-                  재발급
-                </button>
-              </div>
-            )}
-          </div>
+                읽기 전용 공유 링크 활성화
+              </label>
+              {isShared && (
+                <div className="mt-2 flex items-center gap-2">
+                  <input
+                    readOnly
+                    value={shareUrl}
+                    className="flex-1 rounded border border-[var(--border-color)] bg-[var(--input-bg)] px-2 py-1 text-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCopy}
+                    className="rounded bg-blue-600 px-2.5 py-1 text-xs text-white"
+                  >
+                    {copied ? "복사됨" : "복사"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRegenerateToken}
+                    className="rounded border border-[var(--border-color)] bg-[var(--bg-surface)] px-2.5 py-1 text-xs"
+                  >
+                    재발급
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           {error && <p className="text-red-500">{error}</p>}
 
