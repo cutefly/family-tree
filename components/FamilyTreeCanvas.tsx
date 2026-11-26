@@ -121,7 +121,11 @@ export function FamilyTreeCanvas({
     const f3Chart = f3.createChart(container, initialData as unknown as f3.Data);
     chartRef.current = f3Chart;
 
-    f3Chart.setTransitionTime(400).setCardXSpacing(240).setCardYSpacing(150);
+    f3Chart
+      .setTransitionTime(400)
+      .setCardXSpacing(240)
+      .setCardYSpacing(150)
+      .setSingleParentEmptyCard(false);
 
     const f3Card = f3Chart.setCardHtml();
     f3Card.setCardDisplay([
