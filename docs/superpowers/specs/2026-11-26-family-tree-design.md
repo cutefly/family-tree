@@ -28,11 +28,10 @@
 단일 **Next.js (App Router, TypeScript)** 프로젝트로 프론트엔드 UI와 백엔드 API를 통합 구성합니다.
 
 - **Presentation Layer (`app/`, `components/`)**:
-  - `FamilyTreeCanvas`: `family-chart` 라이브러리를 마운트하여 가계도 다이어그램을 렌더링하고, 줌/패닝, 중심 인물 전환, 상·하위 세대 수(`setAncestryDepth`, `setProgenyDepth`) 및 자녀 나열 방식 보기 옵션을 제공합니다.
-  - `PersonDetailPanel`: 노드 클릭 시 상세 정보 표시 및 소유자 전용 편집(정보 수정, 부모/배우자/자녀 추가·연결·삭제)을 처리합니다.
+  - `FamilyTreeCanvas`: `family-chart` 라이브러리를 마운트하여 보기 화면(`1-basic-tree` 패턴: `createChart` + `setCardHtml` + `setAncestryDepth`/`setProgenyDepth`)과 작성/편집 화면(`create-tree` 패턴: `editTree` + `setFields` + `setOnChange`)을 모드에 따라 렌더링합니다.
   - `TreeSettingsModal`: 가계도 제목, 글로벌 본관·성씨(한글/한자), 기본 자녀 나열 방식(`childOrderMode`), 공유 링크 활성화/재발급을 관리합니다.
 - **Domain Logic (`lib/`)**:
-  - `lib/family-graph.ts`: DB 엔티티(`Person[]`, `Marriage[]`)를 `family-chart` 입력 데이터 포맷으로 변환하는 순수 함수 모듈 (자녀 정렬, 표시 이름 포맷팅 포함).
+  - `lib/family-graph.ts`: DB 엔티티(`Person[]`, `Marriage[]`)와 `family-chart` 데이터 포맷 간의 양방향 변환(DB → `family-chart` 및 `editTree().setOnChange` 결과 → DB 동기화 페이로드)을 담당하는 순수 함수 모듈입니다. (자녀 정렬, 표시 이름 포맷팅 포함)
   - `lib/validation.ts`: 순환 부모 참조 검사, 이름/성씨 필수 입력 검증 등 무결성 규칙.
   - `lib/auth.ts`: 비밀번호 해싱(`scrypt`) 및 HTTP-only 세션 쿠키 검증.
 - **API & Data Layer (`app/api/`, `prisma/`)**:
@@ -116,12 +115,16 @@
 - **`BY_ORDER`**: `birthOrder` 오름차순으로 정렬 (`null`인 경우 뒤쪽에 배치, 동일 순번 시 `createdAt` 순).
 - **`BY_GENDER_THEN_ORDER`**: 성별 그룹(`MALE` → `FEMALE` → `OTHER`)으로 먼저 묶고, 각 그룹 내에서 `birthOrder` 오름차순으로 정렬.
 
-### 4.3 `family-chart` 어댑터 매핑 및 세대 범위 제어
-- `lib/family-graph.ts`는 `Person[]`과 `Marriage[]`를 `family-chart` 노드 포맷(`{ id, data, rels: { parents, children, spouses } }`)으로 변환합니다.
-- `children` 배열은 선택된 `childOrderMode`에 따라 정렬한 순서대로 전달합니다.
-- **상·하위 세대 범위 표기**: 커스텀 그래프 필터링을 직접 구현하지 않고, `family-chart`가 기본 제공하는 `setAncestryDepth(depth)` 및 `setProgenyDepth(depth)` API에 UI의 세대 수 옵션을 연결하여 처리합니다.
-- `family-chart`의 성별 매핑(`'M' | 'F'`)에서 `OTHER`는 레이아웃 처리용 기본값으로 매핑하되 카드 UI에는 실제 성별 라벨을 표시합니다.
-- 캔버스는 줌/패닝, 화면 맞춤(Fit), 중심 인물 전환, 상/하위 세대 수 선택 컨트롤을 제공합니다.
+### 4.3 `family-chart` 어댑터 매핑 및 화면 모드
+- **DB ↔ `family-chart` 변환 (`lib/family-graph.ts`)**:
+  - DB의 `Person[]`과 `Marriage[]`를 `family-chart` 노드 포맷(`{ id, data, rels: { parents, children, spouses } }`)으로 변환하며, `children` 배열은 선택된 `childOrderMode`에 따라 정렬해 전달합니다.
+  - `family-chart`의 성별 매핑(`'M' | 'F'`)에서 `OTHER`는 레이아웃 처리용 기본값으로 매핑하되 카드 표시 데이터에는 실제 성별 라벨을 유지합니다.
+- **보기 화면 (`1-basic-tree` 패턴)**:
+  - `f3.createChart()`와 `setCardHtml()`로 읽기 전용 트리를 렌더링합니다.
+  - 상단 컨트롤의 상·하위 세대 수 옵션을 `setAncestryDepth(depth)` 및 `setProgenyDepth(depth)`에 연결하고, 중심 인물 전환 및 줌/패닝을 제공합니다.
+- **작성/편집 화면 (`create-tree` 패턴, 소유자 전용)**:
+  - `f3Chart.editTree()`와 `setFields()`로 `family-chart` 내장 편집 폼(한글/한자 이름, 성씨·본관 한글/한자, 생몰년, 자녀 순번, 메모 및 부모·배우자·자녀 추가/수정/삭제)을 활성화합니다.
+  - `setOnChange()` 콜백에서 변경된 트리 데이터를 받아 PostgreSQL 저장 API(`PUT /api/trees/[treeId]/graph`)로 동기화합니다.
 
 ---
 
@@ -140,9 +143,10 @@
   - `PATCH /api/trees/[treeId]` — 글로벌 설정, `childOrderMode`, `rootPersonId`, `isShared` 수정 및 `shareToken` 재발급
   - `DELETE /api/trees/[treeId]` — 가계도 삭제
 - **인물 및 관계 (소유자 인증 + `tree.ownerId === session.userId` 검증 필수)**:
-  - `POST /api/trees/[treeId]/persons` — 인물 추가 (글로벌 본관·성씨 기본값 자동 제안 가능)
-  - `PATCH /api/trees/[treeId]/persons/[personId]` — 인물 정보 및 `fatherId`/`motherId`/`birthOrder` 수정
-  - `DELETE /api/trees/[treeId]/persons/[personId]` — 인물 삭제
+  - `PUT /api/trees/[treeId]/graph` — `family-chart` `editTree().setOnChange()`에서 전달된 전체 그래프 상태를 검증 후 트랜잭션으로 `Person` 및 `Marriage` 테이블에 일괄 동기화
+  - `POST /api/trees/[treeId]/persons` — 개별 인물 추가 (글로벌 본관·성씨 기본값 자동 제안 가능)
+  - `PATCH /api/trees/[treeId]/persons/[personId]` — 개별 인물 정보 및 `fatherId`/`motherId`/`birthOrder` 수정
+  - `DELETE /api/trees/[treeId]/persons/[personId]` — 개별 인물 삭제
   - `POST /api/trees/[treeId]/marriages` — 배우자 연결
   - `DELETE /api/trees/[treeId]/marriages/[marriageId]` — 배우자 연결 해제
 - **읽기 전용 공유 (인증 불필요)**:
