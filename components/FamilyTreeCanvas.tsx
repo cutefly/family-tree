@@ -65,6 +65,9 @@ export function FamilyTreeCanvas({
   );
   const [ancestryDepth, setAncestryDepth] = useState<number | null>(null);
   const [progenyDepth, setProgenyDepth] = useState<number | null>(null);
+  const [orientation, setOrientation] = useState<"vertical" | "horizontal">(
+    "vertical"
+  );
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{
@@ -329,6 +332,12 @@ export function FamilyTreeCanvas({
       }
     }
 
+    if (orientation === "horizontal") {
+      f3Chart.setOrientationHorizontal();
+    } else {
+      f3Chart.setOrientationVertical();
+    }
+
     f3Chart.updateTree({ initial: true });
 
     return () => {
@@ -359,6 +368,18 @@ export function FamilyTreeCanvas({
     f3Chart.setProgenyDepth(progenyDepth ?? 100);
     f3Chart.updateTree({});
   }, [ancestryDepth, progenyDepth]);
+
+  // Sync tree orientation without tearing down chart
+  useEffect(() => {
+    const f3Chart = chartRef.current;
+    if (!f3Chart) return;
+    if (orientation === "horizontal") {
+      f3Chart.setOrientationHorizontal();
+    } else {
+      f3Chart.setOrientationVertical();
+    }
+    f3Chart.updateTree({});
+  }, [orientation]);
 
   return (
     <div className="flex h-full flex-col">
@@ -415,6 +436,20 @@ export function FamilyTreeCanvas({
             >
               <option value="BY_ORDER">순번순</option>
               <option value="BY_GENDER_THEN_ORDER">성별+순번순</option>
+            </select>
+          </label>
+
+          <label className="flex items-center gap-1.5 text-[var(--text-secondary)]">
+            <span>트리 방향</span>
+            <select
+              value={orientation}
+              onChange={(e) =>
+                setOrientation(e.target.value as "vertical" | "horizontal")
+              }
+              className="rounded border border-[var(--border-color)] bg-[var(--input-bg)] px-2 py-1 text-sm text-[var(--text-primary)]"
+            >
+              <option value="vertical">세로 방향</option>
+              <option value="horizontal">가로 방향</option>
             </select>
           </label>
         </div>
