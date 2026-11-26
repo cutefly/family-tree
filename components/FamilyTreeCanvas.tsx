@@ -144,6 +144,116 @@ export function FamilyTreeCanvas({
         .setFields(EDIT_FIELDS)
         .setEditFirst(true)
         .setCardClickOpen(f3Card)
+        .setOnFormCreation(({ cont, form_creator }) => {
+          const storeData = f3Chart.store.getData() as unknown as FamilyChartDatum[];
+          const current = storeData.find((d) => d.id === form_creator.datum_id);
+          if (!current || (current as { _new_rel_data?: unknown })._new_rel_data) {
+            return;
+          }
+
+          const parentNodes = (current.rels?.parents ?? [])
+            .map((pid) => storeData.find((d) => d.id === pid))
+            .filter((d): d is FamilyChartDatum => Boolean(d));
+
+          const father =
+            parentNodes.find((p) => p.data.gender !== "F") ?? parentNodes[0];
+          if (!father) return;
+
+          const currentMother = parentNodes.find(
+            (p) => p.id !== father.id && p.data.gender === "F"
+          );
+
+          const candidateIds = new Set<string>(father.rels?.spouses ?? []);
+          if (currentMother) candidateIds.add(currentMother.id);
+
+          const candidates = Array.from(candidateIds)
+            .map((id) => storeData.find((d) => d.id === id))
+            .filter((d): d is FamilyChartDatum => Boolean(d));
+
+          if (candidates.length < 2 && (candidates.length === 0 || currentMother)) {
+            return;
+          }
+
+          const existing = cont.querySelector(".f3-mother-select-field");
+          if (existing) existing.remove();
+
+          const wrapper = document.createElement("div");
+          wrapper.className = "f3-form-field f3-mother-select-field";
+
+          const label = document.createElement("label");
+          label.textContent = "어머니 선택";
+          wrapper.appendChild(label);
+
+          const select = document.createElement("select");
+          const emptyOpt = document.createElement("option");
+          emptyOpt.value = "";
+          emptyOpt.textContent = "선택 안 함";
+          select.appendChild(emptyOpt);
+
+          for (const cand of candidates) {
+            const opt = document.createElement("option");
+            opt.value = cand.id;
+            const { primary, secondary } = formatPersonDisplayName({
+              nameKo: cand.data.nameKo || null,
+              nameHanja: cand.data.nameHanja || null,
+              surnameKo: cand.data.surnameKo || null,
+              bonKo: cand.data.bonKo || null,
+            });
+            opt.textContent = secondary ? `${primary} (${secondary})` : primary;
+            if (currentMother?.id === cand.id) {
+              opt.selected = true;
+            }
+            select.appendChild(opt);
+          }
+
+          select.addEventListener("change", async () => {
+            const nextMotherId = select.value || null;
+            if (currentMother) {
+              currentMother.rels.children = (currentMother.rels.children ?? []).filter(
+                (cid) => cid !== current.id
+              );
+            }
+            current.rels.parents = (current.rels.parents ?? []).filter(
+              (pid) => pid === father.id
+            );
+            if (nextMotherId) {
+              const nextMother = storeData.find((d) => d.id === nextMotherId);
+              if (nextMother) {
+                current.rels.parents.push(nextMother.id);
+                nextMother.rels.children = nextMother.rels.children ?? [];
+                if (!nextMother.rels.children.includes(current.id)) {
+                  nextMother.rels.children.push(current.id);
+                }
+              }
+            }
+
+            f3Chart.updateTree({});
+            const handler = onGraphChangeRef.current;
+            if (!handler) return;
+            try {
+              setSaving(true);
+              setErrorMsg(null);
+              const exported = f3EditTree.exportData() as unknown as FamilyChartDatum[];
+              skipNextDataSyncRef.current = true;
+              await handler(exported);
+            } catch (err) {
+              skipNextDataSyncRef.current = false;
+              setErrorMsg(
+                err instanceof Error ? err.message : "저장 중 오류가 발생했습니다."
+              );
+            } finally {
+              setSaving(false);
+            }
+          });
+
+          const buttonsEl = cont.querySelector(".f3-form-buttons");
+          if (buttonsEl && buttonsEl.parentNode) {
+            buttonsEl.parentNode.insertBefore(wrapper, buttonsEl);
+          } else {
+            const formEl = cont.querySelector("form");
+            formEl?.appendChild(wrapper);
+          }
+        })
         .setOnChange(async () => {
           const handler = onGraphChangeRef.current;
           if (!handler) return;
