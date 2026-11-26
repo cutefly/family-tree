@@ -1,5 +1,7 @@
 import crypto from "node:crypto";
 import { cookies } from "next/headers";
+import type { UserRole } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 
 export const SESSION_COOKIE_NAME = "ft_session";
 
@@ -110,4 +112,23 @@ export async function getSessionUser(): Promise<{
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
   if (!token) return null;
   return verifySessionToken(token);
+}
+
+export interface CurrentUser {
+  id: string;
+  email: string;
+  name: string;
+  role: UserRole;
+}
+
+export async function getCurrentUser(): Promise<CurrentUser | null> {
+  const session = await getSessionUser();
+  if (!session) return null;
+
+  const user = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { id: true, email: true, name: true, role: true },
+  });
+
+  return user;
 }
