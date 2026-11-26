@@ -21,7 +21,7 @@ export interface FamilyTreeCanvasProps {
   onGraphChange?: (nodes: FamilyChartDatum[]) => Promise<void>;
 }
 
-const EDIT_FIELDS = [
+const EDIT_FIELDS_BEFORE_MOTHER = [
   { type: "text", label: "한글 이름", id: "nameKo" },
   { type: "text", label: "한자 이름", id: "nameHanja" },
   { type: "text", label: "성씨 (한글)", id: "surnameKo" },
@@ -31,6 +31,9 @@ const EDIT_FIELDS = [
   { type: "text", label: "생년월일", id: "birthDate" },
   { type: "text", label: "사망일", id: "deathDate" },
   { type: "text", label: "자녀 순번", id: "birthOrder" },
+];
+
+const EDIT_FIELDS_AFTER_MOTHER = [
   { type: "textarea", label: "메모", id: "memo" },
 ];
 
@@ -171,7 +174,7 @@ export function FamilyTreeCanvas({
           const candidateIds = new Set<string>(father.rels?.spouses ?? []);
           if (currentMotherId) candidateIds.add(currentMotherId);
 
-          return Array.from(candidateIds)
+          const options = Array.from(candidateIds)
             .map((id) => storeData.find((d) => d.id === id))
             .filter((d): d is FamilyChartDatum => Boolean(d))
             .map((cand) => {
@@ -186,14 +189,37 @@ export function FamilyTreeCanvas({
                 label: secondary ? `${primary} (${secondary})` : primary,
               };
             });
+
+          // If there is exactly 1 mother candidate, default motherId to her
+          if (options.length === 1 && !datum.data.motherId) {
+            datum.data.motherId = options[0].value;
+          }
+
+          return options;
         },
       };
 
       const f3EditTree = f3Chart
         .editTree()
-        .setFields([motherSelectField, ...EDIT_FIELDS] as unknown as string[])
+        .setFields([
+          ...EDIT_FIELDS_BEFORE_MOTHER,
+          motherSelectField,
+          ...EDIT_FIELDS_AFTER_MOTHER,
+        ] as unknown as string[])
         .setEditFirst(true)
         .setCardClickOpen(f3Card)
+        .setOnFormCreation(({ cont }) => {
+          const select = cont.querySelector<HTMLSelectElement>(
+            'select[name="motherId"]'
+          );
+          const fieldEl = select?.closest<HTMLElement>(".f3-form-field");
+          if (!select || !fieldEl) return;
+
+          // 1 placeholder ("선택 안 함") + 2+ mother candidates => options.length >= 3
+          if (select.options.length < 3) {
+            fieldEl.style.display = "none";
+          }
+        })
         .setOnChange(async () => {
           // Sync rels.parents and mother.rels.children with any motherId change from the select field
           const storeData = f3Chart.store.getData() as unknown as FamilyChartDatum[];
