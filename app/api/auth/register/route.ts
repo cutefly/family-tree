@@ -28,10 +28,16 @@ export async function POST(request: Request) {
       );
     }
 
+    const adminEmails = (process.env.ADMIN_EMAIL ?? "")
+      .split(",")
+      .map((item) => item.trim().toLowerCase())
+      .filter(Boolean);
+    const role = adminEmails.includes(email) ? "ADMIN" : "USER";
+
     const passwordHash = await hashPassword(password);
     const user = await prisma.user.create({
-      data: { email, passwordHash, name },
-      select: { id: true, email: true, name: true },
+      data: { email, passwordHash, name, role },
+      select: { id: true, email: true, name: true, role: true },
     });
 
     const token = signSessionToken({ userId: user.id, email: user.email });

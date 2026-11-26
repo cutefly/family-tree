@@ -1,18 +1,8 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { getSessionUser } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth";
 
 export async function GET() {
-  const session = await getSessionUser();
-  if (!session) {
-    return NextResponse.json({ user: null }, { status: 401 });
-  }
-
-  const user = await prisma.user.findUnique({
-    where: { id: session.userId },
-    select: { id: true, email: true, name: true },
-  });
-
+  const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ user: null }, { status: 401 });
   }
