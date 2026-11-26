@@ -188,7 +188,13 @@ export function FamilyTreeCanvas({
 
           const options = Array.from(candidateIds)
             .map((id) => storeData.find((d) => d.id === id))
-            .filter((d): d is FamilyChartDatum => Boolean(d))
+            .filter(
+              (d): d is FamilyChartDatum =>
+                d !== undefined &&
+                !d.unknown &&
+                !d.to_add &&
+                !(d as { _new_rel_data?: unknown })._new_rel_data
+            )
             .map((cand) => {
               const { primary, secondary } = formatPersonDisplayName({
                 nameKo: cand.data.nameKo || null,
