@@ -50,7 +50,7 @@ describe("Auth & /api/trees role permissions", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: "admin@test.com",
-          password: "pw",
+          password: "password123",
           name: "관리자",
         }),
       })
@@ -68,7 +68,7 @@ describe("Auth & /api/trees role permissions", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: "user@test.com",
-          password: "pw",
+          password: "password123",
           name: "일반",
         }),
       })
@@ -124,6 +124,8 @@ describe("Auth & /api/trees role permissions", () => {
       {
         id: "t2",
         title: "가계2",
+        ownerId: "owner-1",
+        shareToken: "secret-tok",
         _count: { persons: 5, members: 1 },
         members: [{ role: "EDITOR" }],
       },
@@ -134,6 +136,8 @@ describe("Auth & /api/trees role permissions", () => {
     const userJson = await userRes.json();
     expect(userJson.trees[0].myRole).toBe("EDITOR");
     expect(userJson.trees[0].members).toBeUndefined();
+    expect(userJson.trees[0].shareToken).toBeUndefined();
+    expect(userJson.trees[0].ownerId).toBeUndefined();
   });
 
   it("POST /api/trees returns 403 for USER and 201 for ADMIN", async () => {
@@ -179,5 +183,21 @@ describe("Auth & /api/trees role permissions", () => {
         }),
       })
     );
+  });
+
+  it("POST /api/auth/register rejects passwords shorter than 8 characters", async () => {
+    const { POST } = await import("@/app/api/auth/register/route");
+    const res = await POST(
+      new Request("http://localhost/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: "short@test.com",
+          password: "123",
+          name: "짧은비번",
+        }),
+      })
+    );
+    expect(res.status).toBe(400);
   });
 });

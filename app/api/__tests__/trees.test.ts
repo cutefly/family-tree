@@ -252,11 +252,13 @@ describe("Trees & Share API routes", () => {
     expect(res.status).toBe(400);
   });
 
-  it("allows VIEWER to GET /api/trees/[treeId] with myRole, blocks VIEWER on PATCH and DELETE", async () => {
+  it("allows VIEWER to GET /api/trees/[treeId] with myRole, omits shareToken/ownerId, blocks VIEWER on PATCH and DELETE", async () => {
     mockGetCurrentUser.mockResolvedValue({ id: "viewer-1", email: "v@test.com", name: "열람", role: "USER" });
     mockPrisma.familyTree.findUnique.mockResolvedValue({
       id: "tree-1",
       title: "김해 김씨",
+      ownerId: "owner-1",
+      shareToken: "secret-share-token",
       persons: [],
       marriages: [],
     });
@@ -269,6 +271,8 @@ describe("Trees & Share API routes", () => {
     expect(getRes.status).toBe(200);
     const getJson = await getRes.json();
     expect(getJson.myRole).toBe("VIEWER");
+    expect(getJson.tree.shareToken).toBeUndefined();
+    expect(getJson.tree.ownerId).toBeUndefined();
 
     const patchRes = await PATCH(
       new Request("http://localhost/api/trees/tree-1", {

@@ -34,10 +34,12 @@ export async function GET() {
     },
   });
 
-  const trees = rawTrees.map(({ members, ...tree }) => ({
-    ...tree,
-    myRole: members[0]?.role ?? ("VIEWER" as const),
-  }));
+  const trees = rawTrees.map(({ members, shareToken, ownerId, ...tree }) => {
+    const myRole = members[0]?.role ?? ("VIEWER" as const);
+    return myRole === "OWNER"
+      ? { ...tree, shareToken, ownerId, myRole }
+      : { ...tree, myRole };
+  });
 
   return NextResponse.json({ trees });
 }

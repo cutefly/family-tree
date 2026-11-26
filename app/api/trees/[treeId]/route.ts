@@ -18,6 +18,18 @@ export async function GET(_request: Request, { params }: Params) {
     },
   });
 
+  if (!tree) {
+    return NextResponse.json(
+      { error: "가계도를 찾을 수 없습니다." },
+      { status: 404 }
+    );
+  }
+
+  if (auth.role !== "OWNER" && auth.role !== "ADMIN") {
+    const { shareToken: _shareToken, ownerId: _ownerId, ...safeTree } = tree;
+    return NextResponse.json({ tree: safeTree, myRole: auth.role });
+  }
+
   return NextResponse.json({ tree, myRole: auth.role });
 }
 
