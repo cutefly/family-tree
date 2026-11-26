@@ -1,14 +1,14 @@
 import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireOwnedTree } from "@/lib/tree-auth";
+import { requireTreeAccess } from "@/lib/tree-auth";
 
 type Params = { params: Promise<{ treeId: string }> };
 
 export async function GET(_request: Request, { params }: Params) {
   const { treeId } = await params;
-  const auth = await requireOwnedTree(treeId);
-  if (auth.error) return auth.error;
+  const auth = await requireTreeAccess(treeId, "VIEWER");
+  if ("error" in auth) return auth.error;
 
   const tree = await prisma.familyTree.findUnique({
     where: { id: treeId },
@@ -18,15 +18,25 @@ export async function GET(_request: Request, { params }: Params) {
     },
   });
 
-  return NextResponse.json({ tree });
+  return NextResponse.json({ tree, myRole: auth.role });
 }
 
 export async function PATCH(request: Request, { params }: Params) {
   const { treeId } = await params;
-  const auth = await requireOwnedTree(treeId);
-  if (auth.error) return auth.error;
+  const auth = await requireTreeAccess(treeId, "EDITOR");
+  if ("error" in auth) return auth.error;
 
   const body = await request.json();
+  if (
+    (typeof body.isShared === "boolean" || body.regenerateShareToken === true) &&
+    auth.role !== "OWNER" &&
+    auth.role !== "ADMIN"
+  ) {
+    return NextResponse.json(
+      { error: "공유 설정은 소유자 또는 관리자만 변경할 수 있습니다." },
+      { status: 403 }
+    );
+  }
   const data: Record<string, unknown> = {};
 
   if (typeof body.title === "string" && body.title.trim()) {
@@ -78,8 +88,8 @@ export async function PATCH(request: Request, { params }: Params) {
 
 export async function DELETE(_request: Request, { params }: Params) {
   const { treeId } = await params;
-  const auth = await requireOwnedTree(treeId);
-  if (auth.error) return auth.error;
+  const auth = await requireTreeAccess(treeId, "OWNER");
+  if ("error" in auth) return auth.error;
 
   await prisma.familyTree.delete({ where: { id: treeId } });
   return NextResponse.json({ ok: true });

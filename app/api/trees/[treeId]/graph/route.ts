@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { fromFamilyChartData, type FamilyChartDatum } from "@/lib/family-graph";
 import { prisma } from "@/lib/prisma";
-import { requireOwnedTree } from "@/lib/tree-auth";
+import { requireTreeAccess } from "@/lib/tree-auth";
 import {
   ValidationError,
   normalizeSpousePair,
@@ -13,8 +13,8 @@ type Params = { params: Promise<{ treeId: string }> };
 
 export async function PUT(request: Request, { params }: Params) {
   const { treeId } = await params;
-  const auth = await requireOwnedTree(treeId);
-  if (auth.error) return auth.error;
+  const auth = await requireTreeAccess(treeId, "EDITOR");
+  if ("error" in auth) return auth.error;
 
   try {
     const body = await request.json();
