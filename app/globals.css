@@ -54,36 +54,37 @@
   }
 }
 
-/* Sync family-chart canvas and edit form with active light/dark theme */
-.f3 {
+/* Sync family-chart canvas and edit form with active light/dark theme (ID specificity beats bundled family-chart.css) */
+#FamilyChart.f3 {
   --background-color: var(--bg-page);
   --text-color: var(--text-primary);
+  background-color: var(--bg-page);
   color: var(--text-primary);
 }
 
-.f3-form-cont {
+#FamilyChart .f3-form-cont {
   background-color: var(--bg-surface);
   color: var(--text-primary);
   border-left: 1px solid var(--border-color);
 }
 
-.f3-form-title,
-.f3-info-field-label,
-.f3-form-field label,
-.f3-radio-group label {
+#FamilyChart .f3-form-title,
+#FamilyChart .f3-info-field-label,
+#FamilyChart .f3-form-field label,
+#FamilyChart .f3-radio-group label {
   color: var(--text-primary);
   opacity: 0.9;
 }
 
-.f3-form input[type="text"],
-.f3-form textarea,
-.f3-form select {
+#FamilyChart .f3-form input[type="text"],
+#FamilyChart .f3-form textarea,
+#FamilyChart .f3-form select {
   background-color: var(--input-bg);
   color: var(--text-primary);
   border-color: var(--border-color);
 }
 
-.f3-cancel-btn {
+#FamilyChart .f3-cancel-btn {
   background-color: var(--bg-muted);
   color: var(--text-primary);
 }
