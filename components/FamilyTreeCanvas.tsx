@@ -68,6 +68,7 @@ export function FamilyTreeCanvas({
   const [orientation, setOrientation] = useState<"vertical" | "horizontal">(
     "vertical"
   );
+  const [showOptions, setShowOptions] = useState(false);
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{
@@ -381,87 +382,129 @@ export function FamilyTreeCanvas({
     f3Chart.updateTree({});
   }, [orientation]);
 
+  const activeOptionSummary = useMemo(() => {
+    const parts: string[] = [];
+    if (ancestryDepth !== null) parts.push(`상위 ${ancestryDepth}대`);
+    if (progenyDepth !== null) parts.push(`하위 ${progenyDepth}대`);
+    if (childOrderMode !== tree.childOrderMode) {
+      parts.push(
+        childOrderMode === "BY_GENDER_THEN_ORDER" ? "성별+순번" : "순번순"
+      );
+    }
+    if (orientation === "horizontal") parts.push("가로");
+    return parts.join(" · ");
+  }, [ancestryDepth, progenyDepth, childOrderMode, tree.childOrderMode, orientation]);
+
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border-color)] bg-[var(--bg-surface)] px-4 py-2.5 text-sm">
-        <div className="flex flex-wrap items-center gap-3">
-          <label className="flex items-center gap-1.5 text-[var(--text-secondary)]">
-            <span>상위 세대</span>
-            <select
-              value={ancestryDepth === null ? "all" : String(ancestryDepth)}
-              onChange={(e) =>
-                setAncestryDepth(
-                  e.target.value === "all" ? null : Number(e.target.value)
-                )
-              }
-              className="rounded border border-[var(--border-color)] bg-[var(--input-bg)] px-2 py-1 text-sm text-[var(--text-primary)]"
-            >
-              <option value="all">전체</option>
-              {[1, 2, 3, 4, 5].map((n) => (
-                <option key={n} value={n}>
-                  {n}대
-                </option>
-              ))}
-            </select>
-          </label>
+    <div className="relative flex h-full flex-col">
+      <div className="pointer-events-none absolute inset-x-3 top-3 z-20 flex flex-col items-start gap-2">
+        <div className="flex w-full items-center justify-between gap-2">
+          <button
+            type="button"
+            aria-expanded={showOptions}
+            aria-controls="tree-view-options"
+            onClick={() => setShowOptions((prev) => !prev)}
+            className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-[var(--border-color)] bg-[var(--bg-surface)]/95 px-3.5 py-1.5 text-sm font-medium text-[var(--text-primary)] shadow-sm backdrop-blur-sm transition hover:bg-[var(--bg-muted)]"
+          >
+            <span>보기 옵션</span>
+            {activeOptionSummary && (
+              <span className="rounded-full bg-blue-600/15 px-2 py-0.5 text-xs text-blue-600">
+                {activeOptionSummary}
+              </span>
+            )}
+            <span className="text-xs text-[var(--text-secondary)]">
+              {showOptions ? "▴" : "▾"}
+            </span>
+          </button>
 
-          <label className="flex items-center gap-1.5 text-[var(--text-secondary)]">
-            <span>하위 세대</span>
-            <select
-              value={progenyDepth === null ? "all" : String(progenyDepth)}
-              onChange={(e) =>
-                setProgenyDepth(
-                  e.target.value === "all" ? null : Number(e.target.value)
-                )
-              }
-              className="rounded border border-[var(--border-color)] bg-[var(--input-bg)] px-2 py-1 text-sm text-[var(--text-primary)]"
-            >
-              <option value="all">전체</option>
-              {[1, 2, 3, 4, 5].map((n) => (
-                <option key={n} value={n}>
-                  {n}대
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="flex items-center gap-1.5 text-[var(--text-secondary)]">
-            <span>자녀 나열</span>
-            <select
-              value={childOrderMode}
-              onChange={(e) =>
-                setChildOrderMode(e.target.value as ChildOrderMode)
-              }
-              className="rounded border border-[var(--border-color)] bg-[var(--input-bg)] px-2 py-1 text-sm text-[var(--text-primary)]"
-            >
-              <option value="BY_ORDER">순번순</option>
-              <option value="BY_GENDER_THEN_ORDER">성별+순번순</option>
-            </select>
-          </label>
-
-          <label className="flex items-center gap-1.5 text-[var(--text-secondary)]">
-            <span>트리 방향</span>
-            <select
-              value={orientation}
-              onChange={(e) =>
-                setOrientation(e.target.value as "vertical" | "horizontal")
-              }
-              className="rounded border border-[var(--border-color)] bg-[var(--input-bg)] px-2 py-1 text-sm text-[var(--text-primary)]"
-            >
-              <option value="vertical">세로 방향</option>
-              <option value="horizontal">가로 방향</option>
-            </select>
-          </label>
+          <div className="pointer-events-auto flex items-center gap-2">
+            {saving && (
+              <span className="rounded-full border border-[var(--border-color)] bg-[var(--bg-surface)]/95 px-3 py-1 text-xs font-medium text-blue-500 shadow-sm backdrop-blur-sm">
+                저장 중...
+              </span>
+            )}
+            {errorMsg && (
+              <span className="rounded-full border border-red-500/30 bg-[var(--bg-surface)]/95 px-3 py-1 text-xs font-medium text-red-500 shadow-sm backdrop-blur-sm">
+                {errorMsg}
+              </span>
+            )}
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {saving && (
-            <span className="text-xs font-medium text-blue-500">저장 중...</span>
-          )}
-          {errorMsg && (
-            <span className="text-xs font-medium text-red-500">{errorMsg}</span>
-          )}
-        </div>
+        {showOptions && (
+          <div
+            id="tree-view-options"
+            className="pointer-events-auto flex flex-wrap items-center gap-3 rounded-xl border border-[var(--border-color)] bg-[var(--bg-surface)]/95 px-4 py-2.5 text-sm shadow-md backdrop-blur-sm"
+          >
+            <label className="flex items-center gap-1.5 text-[var(--text-secondary)]">
+              <span>상위 세대</span>
+              <select
+                value={ancestryDepth === null ? "all" : String(ancestryDepth)}
+                onChange={(e) =>
+                  setAncestryDepth(
+                    e.target.value === "all" ? null : Number(e.target.value)
+                  )
+                }
+                className="rounded border border-[var(--border-color)] bg-[var(--input-bg)] px-2 py-1 text-sm text-[var(--text-primary)]"
+              >
+                <option value="all">전체</option>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <option key={n} value={n}>
+                    {n}대
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="flex items-center gap-1.5 text-[var(--text-secondary)]">
+              <span>하위 세대</span>
+              <select
+                value={progenyDepth === null ? "all" : String(progenyDepth)}
+                onChange={(e) =>
+                  setProgenyDepth(
+                    e.target.value === "all" ? null : Number(e.target.value)
+                  )
+                }
+                className="rounded border border-[var(--border-color)] bg-[var(--input-bg)] px-2 py-1 text-sm text-[var(--text-primary)]"
+              >
+                <option value="all">전체</option>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <option key={n} value={n}>
+                    {n}대
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="flex items-center gap-1.5 text-[var(--text-secondary)]">
+              <span>자녀 나열</span>
+              <select
+                value={childOrderMode}
+                onChange={(e) =>
+                  setChildOrderMode(e.target.value as ChildOrderMode)
+                }
+                className="rounded border border-[var(--border-color)] bg-[var(--input-bg)] px-2 py-1 text-sm text-[var(--text-primary)]"
+              >
+                <option value="BY_ORDER">순번순</option>
+                <option value="BY_GENDER_THEN_ORDER">성별+순번순</option>
+              </select>
+            </label>
+
+            <label className="flex items-center gap-1.5 text-[var(--text-secondary)]">
+              <span>트리 방향</span>
+              <select
+                value={orientation}
+                onChange={(e) =>
+                  setOrientation(e.target.value as "vertical" | "horizontal")
+                }
+                className="rounded border border-[var(--border-color)] bg-[var(--input-bg)] px-2 py-1 text-sm text-[var(--text-primary)]"
+              >
+                <option value="vertical">세로 방향</option>
+                <option value="horizontal">가로 방향</option>
+              </select>
+            </label>
+          </div>
+        )}
       </div>
 
       {isEmptyView ? (
