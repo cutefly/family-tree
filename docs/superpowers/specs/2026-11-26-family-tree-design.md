@@ -18,7 +18,7 @@
   - 이름 없이 성씨와 본관(출생지)만 있는 배우자 지원 (성씨·본관 모두 한글/한자 저장)
   - 가계도 단위의 대표 본관·성씨(한글/한자) 글로벌 설정
   - 자녀 순서(`birthOrder`) 저장 및 나열 방식 선택 (전체 순번순 / 성별+순번순)
-- **다이어그램 시각화**: 가계도 전용 라이브러리(`relatives-tree`) 기반 렌더링, 줌/패닝, 특정 인물 기준 상·하위 세대 수(`upGenerations`, `downGenerations`) 필터링 옵션
+- **다이어그램 시각화**: 가계도 전용 라이브러리(`family-chart`) 기반 렌더링, 줌/패닝, 라이브러리 내장 상·하위 세대 수(`setAncestryDepth`, `setProgenyDepth`) 설정 연동
 - **접근 제어**: 소유자 로그인 후 생성·편집, 가족들에게는 읽기 전용 공유 URL(`/share/[token]`) 제공
 
 ---
@@ -28,11 +28,11 @@
 단일 **Next.js (App Router, TypeScript)** 프로젝트로 프론트엔드 UI와 백엔드 API를 통합 구성합니다.
 
 - **Presentation Layer (`app/`, `components/`)**:
-  - `FamilyTreeCanvas`: `relatives-tree`가 계산한 노드 좌표와 연결선을 기반으로 SVG 연결선 및 HTML 인물 카드를 렌더링하고, 줌/패닝 및 세대 범위·정렬 보기 옵션을 제공합니다.
+  - `FamilyTreeCanvas`: `family-chart` 라이브러리를 마운트하여 가계도 다이어그램을 렌더링하고, 줌/패닝, 중심 인물 전환, 상·하위 세대 수(`setAncestryDepth`, `setProgenyDepth`) 및 자녀 나열 방식 보기 옵션을 제공합니다.
   - `PersonDetailPanel`: 노드 클릭 시 상세 정보 표시 및 소유자 전용 편집(정보 수정, 부모/배우자/자녀 추가·연결·삭제)을 처리합니다.
   - `TreeSettingsModal`: 가계도 제목, 글로벌 본관·성씨(한글/한자), 기본 자녀 나열 방식(`childOrderMode`), 공유 링크 활성화/재발급을 관리합니다.
 - **Domain Logic (`lib/`)**:
-  - `lib/family-graph.ts`: DB 엔티티(`Person[]`, `Marriage[]`)를 `relatives-tree` 입력 포맷으로 변환하는 순수 함수 모듈 (세대 범위 필터링, 자녀 정렬, 표시 이름 포맷팅 포함).
+  - `lib/family-graph.ts`: DB 엔티티(`Person[]`, `Marriage[]`)를 `family-chart` 입력 데이터 포맷으로 변환하는 순수 함수 모듈 (자녀 정렬, 표시 이름 포맷팅 포함).
   - `lib/validation.ts`: 순환 부모 참조 검사, 이름/성씨 필수 입력 검증 등 무결성 규칙.
   - `lib/auth.ts`: 비밀번호 해싱(`scrypt`) 및 HTTP-only 세션 쿠키 검증.
 - **API & Data Layer (`app/api/`, `prisma/`)**:
@@ -116,19 +116,12 @@
 - **`BY_ORDER`**: `birthOrder` 오름차순으로 정렬 (`null`인 경우 뒤쪽에 배치, 동일 순번 시 `createdAt` 순).
 - **`BY_GENDER_THEN_ORDER`**: 성별 그룹(`MALE` → `FEMALE` → `OTHER`)으로 먼저 묶고, 각 그룹 내에서 `birthOrder` 오름차순으로 정렬.
 
-### 4.3 특정인 기준 상·하위 세대 범위 필터링
-보기 옵션으로 `focusPersonId`, `upGenerations: number | null`, `downGenerations: number | null`을 받습니다.
-1. `upGenerations === null && downGenerations === null`이면 전체 인원을 반환합니다.
-2. 범위가 지정된 경우:
-   - `focusPersonId`를 `depth = 0`으로 시작합니다.
-   - **상위 탐색**: `depth < upGenerations`인 동안 `fatherId`, `motherId`를 따라 올라가며 `depth + 1` 노드를 포함합니다(`upGenerations = 0`이면 부모 탐색 안 함).
-   - **하위 탐색**: `depth < downGenerations`인 동안 자녀(`fatherId === id || motherId === id`)를 따라 내려가며 `depth + 1` 노드를 포함합니다(`downGenerations = 0`이면 자녀 탐색 안 함).
-   - **배우자 포함**: 선택된 인물들의 배우자(`Marriage`)를 결과 집합에 포함하되, 해당 배우자의 부모는 상위 탐색 대상에 넣지 않아 세대 범위가 의도치 않게 확장되지 않도록 합니다.
-3. 필터링된 부분 집합 내에서만 `parents`, `children`, `spouses`, `siblings` 참조를 재구성해 `relatives-tree`에 전달합니다.
-
-### 4.4 `relatives-tree` 어댑터 매핑
-- `relatives-tree`는 성별로 `'male' | 'female'`만 허용하므로, `OTHER`는 레이아웃 계산 시 `'male'`로 매핑하되 UI 카드 뱃지에는 실제 성별을 표시합니다.
-- 캔버스는 마우스 휠 줌, 드래그 패닝, 화면 맞춤(Fit), 중심 인물 전환, 상/하위 세대 수 선택 컨트롤을 제공합니다.
+### 4.3 `family-chart` 어댑터 매핑 및 세대 범위 제어
+- `lib/family-graph.ts`는 `Person[]`과 `Marriage[]`를 `family-chart` 노드 포맷(`{ id, data, rels: { parents, children, spouses } }`)으로 변환합니다.
+- `children` 배열은 선택된 `childOrderMode`에 따라 정렬한 순서대로 전달합니다.
+- **상·하위 세대 범위 표기**: 커스텀 그래프 필터링을 직접 구현하지 않고, `family-chart`가 기본 제공하는 `setAncestryDepth(depth)` 및 `setProgenyDepth(depth)` API에 UI의 세대 수 옵션을 연결하여 처리합니다.
+- `family-chart`의 성별 매핑(`'M' | 'F'`)에서 `OTHER`는 레이아웃 처리용 기본값으로 매핑하되 카드 UI에는 실제 성별 라벨을 표시합니다.
+- 캔버스는 줌/패닝, 화면 맞춤(Fit), 중심 인물 전환, 상/하위 세대 수 선택 컨트롤을 제공합니다.
 
 ---
 
@@ -179,8 +172,7 @@
   - `family-graph.test.ts`:
     - `nameKo` 유무 및 `bonGwanKo`/`surnameKo` 조합 표시 이름 포맷팅 검증
     - `BY_ORDER` vs `BY_GENDER_THEN_ORDER` 자녀 정렬 검증
-    - `upGenerations` / `downGenerations` 조합별 세대 범위 필터링 및 배우자 포함 규칙 검증
-    - `relatives-tree` 어댑터의 양방향 `parents`/`children`/`spouses`/`siblings` 생성 검증
+    - `family-chart` 어댑터의 양방향 `parents`/`children`/`spouses` 생성 검증
   - `validation.test.ts`:
     - 직계/다세대 순환 부모 참조 탐지 검증
     - 이름/성씨 필수 조건 및 배우자 ID 정규화 검증
