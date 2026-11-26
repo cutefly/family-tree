@@ -218,4 +218,37 @@ describe("Admin & Tree Member APIs", () => {
     );
     expect(deleteOk.status).toBe(200);
   });
+
+  it("POST /api/trees/[treeId]/members blocks ADMIN from demoting the last OWNER via upsert", async () => {
+    const { POST } = await import("@/app/api/trees/[treeId]/members/route");
+
+    mockGetCurrentUser.mockResolvedValueOnce({
+      id: "admin-1",
+      email: "admin@test.com",
+      name: "관리자",
+      role: "ADMIN",
+    });
+    mockPrisma.familyTree.findUnique.mockResolvedValueOnce({
+      id: "t1",
+      ownerId: "owner-1",
+    });
+    mockPrisma.user.findUnique.mockResolvedValueOnce({
+      id: "owner-1",
+      email: "owner@test.com",
+      name: "소유자",
+    });
+    mockPrisma.treeMember.findUnique.mockResolvedValueOnce({ role: "OWNER" });
+    mockPrisma.treeMember.count.mockResolvedValueOnce(1);
+
+    const res = await POST(
+      new Request("http://localhost/api/trees/t1/members", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: "owner@test.com", role: "VIEWER" }),
+      }),
+      { params: Promise.resolve({ treeId: "t1" }) }
+    );
+    expect(res?.status).toBe(400);
+    expect(mockPrisma.treeMember.upsert).not.toHaveBeenCalled();
+  });
 });

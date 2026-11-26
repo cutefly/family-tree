@@ -75,19 +75,28 @@ export async function POST(request: Request, { params }: Params) {
     );
   }
 
-  const existingMember =
-    auth.role !== "ADMIN"
-      ? await prisma.treeMember.findUnique({
-          where: { treeId_userId: { treeId, userId: targetUser.id } },
-          select: { role: true },
-        })
-      : null;
+  const existingMember = await prisma.treeMember.findUnique({
+    where: { treeId_userId: { treeId, userId: targetUser.id } },
+    select: { role: true },
+  });
 
   if (existingMember?.role === "OWNER" && auth.role !== "ADMIN") {
     return NextResponse.json(
       { error: "기존 소유자의 권한은 관리자만 변경할 수 있습니다." },
       { status: 403 }
     );
+  }
+
+  if (existingMember?.role === "OWNER" && role !== "OWNER") {
+    const ownerCount = await prisma.treeMember.count({
+      where: { treeId, role: "OWNER" },
+    });
+    if (ownerCount <= 1) {
+      return NextResponse.json(
+        { error: "가계도의 마지막 소유자는 강등할 수 없습니다." },
+        { status: 400 }
+      );
+    }
   }
 
   const member = await prisma.treeMember.upsert({

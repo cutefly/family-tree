@@ -1,10 +1,16 @@
 import { PrismaClient, TreeRole } from "@prisma/client";
 
+try {
+  process.loadEnvFile?.();
+} catch {
+  // .env가 없으면 기존 환경변수를 사용합니다.
+}
+
 const prisma = new PrismaClient();
 
 async function main() {
   const trees = await prisma.familyTree.findMany({
-    select: { id: true, ownerId: true, title: true },
+    select: { id: true, ownerId: true },
   });
 
   if (trees.length === 0) {
