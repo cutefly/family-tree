@@ -1,1 +1,89 @@
 @import "tailwindcss";
+
+:root {
+  --bg-page-light: #f8fafc;
+  --bg-page-dark: #0f172a;
+  --bg-surface-light: #ffffff;
+  --bg-surface-dark: #1e293b;
+  --bg-muted-light: #f1f5f9;
+  --bg-muted-dark: #334155;
+  --text-primary-light: #0f172a;
+  --text-primary-dark: #f1f5f9;
+  --text-secondary-light: #475569;
+  --text-secondary-dark: #94a3b8;
+  --border-color-light: #cbd5e1;
+  --border-color-dark: #475569;
+  --input-bg-light: #ffffff;
+  --input-bg-dark: #0f172a;
+
+  --bg-page: var(--bg-page-light);
+  --bg-surface: var(--bg-surface-light);
+  --bg-muted: var(--bg-muted-light);
+  --text-primary: var(--text-primary-light);
+  --text-secondary: var(--text-secondary-light);
+  --border-color: var(--border-color-light);
+  --input-bg: var(--input-bg-light);
+
+  color-scheme: light dark;
+
+  &:has(> head > meta[name="color-scheme"][content="dark"]) {
+    color-scheme: dark;
+  }
+  &:has(> head > meta[name="color-scheme"][content="light"]) {
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    --bg-page: var(--bg-page-dark);
+    --bg-surface: var(--bg-surface-dark);
+    --bg-muted: var(--bg-muted-dark);
+    --text-primary: var(--text-primary-dark);
+    --text-secondary: var(--text-secondary-dark);
+    --border-color: var(--border-color-dark);
+    --input-bg: var(--input-bg-dark);
+  }
+
+  @supports (color: light-dark(white, black)) {
+    --bg-page: light-dark(var(--bg-page-light), var(--bg-page-dark));
+    --bg-surface: light-dark(var(--bg-surface-light), var(--bg-surface-dark));
+    --bg-muted: light-dark(var(--bg-muted-light), var(--bg-muted-dark));
+    --text-primary: light-dark(var(--text-primary-light), var(--text-primary-dark));
+    --text-secondary: light-dark(var(--text-secondary-light), var(--text-secondary-dark));
+    --border-color: light-dark(var(--border-color-light), var(--border-color-dark));
+    --input-bg: light-dark(var(--input-bg-light), var(--input-bg-dark));
+  }
+}
+
+/* Sync family-chart canvas and edit form with active light/dark theme */
+.f3 {
+  --background-color: var(--bg-page);
+  --text-color: var(--text-primary);
+  color: var(--text-primary);
+}
+
+.f3-form-cont {
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+  border-left: 1px solid var(--border-color);
+}
+
+.f3-form-title,
+.f3-info-field-label,
+.f3-form-field label,
+.f3-radio-group label {
+  color: var(--text-primary);
+  opacity: 0.9;
+}
+
+.f3-form input[type="text"],
+.f3-form textarea,
+.f3-form select {
+  background-color: var(--input-bg);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+
+.f3-cancel-btn {
+  background-color: var(--bg-muted);
+  color: var(--text-primary);
+}

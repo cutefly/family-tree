@@ -96,14 +96,14 @@ export function TreeSettingsModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-lg rounded-xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-6 text-[var(--text-primary)] shadow-xl">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">가계도 글로벌 설정</h2>
           <button
             type="button"
             onClick={onClose}
-            className="rounded px-2 py-1 text-sm text-slate-500 hover:bg-slate-100"
+            className="rounded px-2 py-1 text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-muted)]"
           >
             닫기
           </button>
@@ -116,7 +116,7 @@ export function TreeSettingsModal({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               required
-              className="w-full rounded-lg border border-slate-300 px-3 py-2"
+              className="w-full rounded-lg border border-[var(--border-color)] bg-[var(--input-bg)] px-3 py-2"
             />
           </div>
 
@@ -127,7 +127,7 @@ export function TreeSettingsModal({
                 value={bonKo}
                 onChange={(e) => setBonKo(e.target.value)}
                 placeholder="예: 김해"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                className="w-full rounded-lg border border-[var(--border-color)] bg-[var(--input-bg)] px-3 py-2"
               />
             </div>
             <div>
@@ -136,7 +136,7 @@ export function TreeSettingsModal({
                 value={bonHanja}
                 onChange={(e) => setBonHanja(e.target.value)}
                 placeholder="예: 金海"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                className="w-full rounded-lg border border-[var(--border-color)] bg-[var(--input-bg)] px-3 py-2"
               />
             </div>
             <div>
@@ -145,7 +145,7 @@ export function TreeSettingsModal({
                 value={surnameKo}
                 onChange={(e) => setSurnameKo(e.target.value)}
                 placeholder="예: 김"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                className="w-full rounded-lg border border-[var(--border-color)] bg-[var(--input-bg)] px-3 py-2"
               />
             </div>
             <div>
@@ -154,7 +154,7 @@ export function TreeSettingsModal({
                 value={surnameHanja}
                 onChange={(e) => setSurnameHanja(e.target.value)}
                 placeholder="예: 金"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                className="w-full rounded-lg border border-[var(--border-color)] bg-[var(--input-bg)] px-3 py-2"
               />
             </div>
           </div>
@@ -166,14 +166,14 @@ export function TreeSettingsModal({
               onChange={(e) =>
                 setChildOrderMode(e.target.value as ChildOrderMode)
               }
-              className="w-full rounded-lg border border-slate-300 px-3 py-2"
+              className="w-full rounded-lg border border-[var(--border-color)] bg-[var(--input-bg)] px-3 py-2"
             >
               <option value="BY_ORDER">순번순</option>
               <option value="BY_GENDER_THEN_ORDER">성별+순번순</option>
             </select>
           </div>
 
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <div className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-muted)] p-3">
             <label className="flex items-center gap-2 font-medium">
               <input
                 type="checkbox"
@@ -187,19 +187,19 @@ export function TreeSettingsModal({
                 <input
                   readOnly
                   value={shareUrl}
-                  className="flex-1 rounded border border-slate-300 bg-white px-2 py-1 text-xs"
+                  className="flex-1 rounded border border-[var(--border-color)] bg-[var(--input-bg)] px-2 py-1 text-xs"
                 />
                 <button
                   type="button"
                   onClick={handleCopy}
-                  className="rounded bg-slate-800 px-2.5 py-1 text-xs text-white"
+                  className="rounded bg-blue-600 px-2.5 py-1 text-xs text-white"
                 >
                   {copied ? "복사됨" : "복사"}
                 </button>
                 <button
                   type="button"
                   onClick={handleRegenerateToken}
-                  className="rounded border border-slate-300 bg-white px-2.5 py-1 text-xs"
+                  className="rounded border border-[var(--border-color)] bg-[var(--bg-surface)] px-2.5 py-1 text-xs"
                 >
                   재발급
                 </button>
@@ -207,13 +207,13 @@ export function TreeSettingsModal({
             )}
           </div>
 
-          {error && <p className="text-red-600">{error}</p>}
+          {error && <p className="text-red-500">{error}</p>}
 
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-slate-300 px-4 py-2"
+              className="rounded-lg border border-[var(--border-color)] px-4 py-2"
             >
               취소
             </button>

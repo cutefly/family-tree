@@ -200,9 +200,9 @@ export function FamilyTreeCanvas({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-2.5 text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border-color)] bg-[var(--bg-surface)] px-4 py-2.5 text-sm">
         <div className="flex flex-wrap items-center gap-3">
-          <label className="flex items-center gap-1.5 text-slate-700">
+          <label className="flex items-center gap-1.5 text-[var(--text-secondary)]">
             <span>상위 세대</span>
             <select
               value={ancestryDepth === null ? "all" : String(ancestryDepth)}
@@ -211,7 +211,7 @@ export function FamilyTreeCanvas({
                   e.target.value === "all" ? null : Number(e.target.value)
                 )
               }
-              className="rounded border border-slate-300 px-2 py-1 text-sm"
+              className="rounded border border-[var(--border-color)] bg-[var(--input-bg)] px-2 py-1 text-sm text-[var(--text-primary)]"
             >
               <option value="all">전체</option>
               {[1, 2, 3, 4, 5].map((n) => (
@@ -222,7 +222,7 @@ export function FamilyTreeCanvas({
             </select>
           </label>
 
-          <label className="flex items-center gap-1.5 text-slate-700">
+          <label className="flex items-center gap-1.5 text-[var(--text-secondary)]">
             <span>하위 세대</span>
             <select
               value={progenyDepth === null ? "all" : String(progenyDepth)}
@@ -231,7 +231,7 @@ export function FamilyTreeCanvas({
                   e.target.value === "all" ? null : Number(e.target.value)
                 )
               }
-              className="rounded border border-slate-300 px-2 py-1 text-sm"
+              className="rounded border border-[var(--border-color)] bg-[var(--input-bg)] px-2 py-1 text-sm text-[var(--text-primary)]"
             >
               <option value="all">전체</option>
               {[1, 2, 3, 4, 5].map((n) => (
@@ -242,14 +242,14 @@ export function FamilyTreeCanvas({
             </select>
           </label>
 
-          <label className="flex items-center gap-1.5 text-slate-700">
+          <label className="flex items-center gap-1.5 text-[var(--text-secondary)]">
             <span>자녀 나열</span>
             <select
               value={childOrderMode}
               onChange={(e) =>
                 setChildOrderMode(e.target.value as ChildOrderMode)
               }
-              className="rounded border border-slate-300 px-2 py-1 text-sm"
+              className="rounded border border-[var(--border-color)] bg-[var(--input-bg)] px-2 py-1 text-sm text-[var(--text-primary)]"
             >
               <option value="BY_ORDER">순번순</option>
               <option value="BY_GENDER_THEN_ORDER">성별+순번순</option>
@@ -259,23 +259,23 @@ export function FamilyTreeCanvas({
 
         <div className="flex items-center gap-2">
           {saving && (
-            <span className="text-xs font-medium text-blue-600">저장 중...</span>
+            <span className="text-xs font-medium text-blue-500">저장 중...</span>
           )}
           {errorMsg && (
-            <span className="text-xs font-medium text-red-600">{errorMsg}</span>
+            <span className="text-xs font-medium text-red-500">{errorMsg}</span>
           )}
         </div>
       </div>
 
       {mode === "view" && chartData.length === 0 ? (
-        <div className="flex flex-1 items-center justify-center bg-slate-50 text-sm text-slate-500">
+        <div className="flex flex-1 items-center justify-center bg-[var(--bg-page)] text-sm text-[var(--text-secondary)]">
           등록된 인물이 없습니다.
         </div>
       ) : (
         <div
           ref={containerRef}
           id="FamilyChart"
-          className="f3 relative flex-1 bg-slate-50"
+          className="f3 relative flex-1 bg-[var(--bg-page)]"
           style={{ minHeight: "600px" }}
         />
       )}

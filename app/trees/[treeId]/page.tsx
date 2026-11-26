@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import type { FamilyTree, Marriage, Person } from "@prisma/client";
 import { FamilyTreeCanvas } from "@/components/FamilyTreeCanvas";
+import { ThemeSelector } from "@/components/ThemeSelector";
 import { TreeSettingsModal } from "@/components/TreeSettingsModal";
 import type { FamilyChartDatum } from "@/lib/family-graph";
 
@@ -71,19 +72,19 @@ export default function TreeDetailPage() {
   }
 
   if (!tree) {
-    return <div className="p-6 text-sm text-slate-500">가계도를 불러오는 중...</div>;
+    return <div className="p-6 text-sm text-[var(--text-secondary)]">가계도를 불러오는 중...</div>;
   }
 
   return (
     <div className="flex h-screen flex-col">
-      <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border-color)] bg-[var(--bg-surface)] px-4 py-3">
         <div className="flex items-center gap-3">
-          <Link href="/trees" className="text-sm text-slate-500 hover:text-slate-900">
+          <Link href="/trees" className="text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
             ← 목록
           </Link>
           <h1 className="text-lg font-bold">{tree.title}</h1>
           {(tree.bonKo || tree.surnameKo) && (
-            <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+            <span className="rounded bg-[var(--bg-muted)] px-2 py-0.5 text-xs text-[var(--text-secondary)]">
               {[tree.bonKo, tree.surnameKo ? `${tree.surnameKo}씨` : null]
                 .filter(Boolean)
                 .join(" ")}
@@ -91,13 +92,16 @@ export default function TreeDetailPage() {
           )}
         </div>
 
-        <div className="flex items-center gap-2 text-sm">
-          <div className="flex overflow-hidden rounded-lg border border-slate-300">
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <ThemeSelector />
+          <div className="flex overflow-hidden rounded-lg border border-[var(--border-color)]">
             <button
               type="button"
               onClick={() => setMode("edit")}
               className={`px-3 py-1 ${
-                mode === "edit" ? "bg-blue-600 text-white" : "bg-white text-slate-700"
+                mode === "edit"
+                  ? "bg-blue-600 text-white"
+                  : "bg-[var(--bg-surface)] text-[var(--text-primary)]"
               }`}
             >
               작성/편집
@@ -106,7 +110,9 @@ export default function TreeDetailPage() {
               type="button"
               onClick={() => setMode("view")}
               className={`px-3 py-1 ${
-                mode === "view" ? "bg-blue-600 text-white" : "bg-white text-slate-700"
+                mode === "view"
+                  ? "bg-blue-600 text-white"
+                  : "bg-[var(--bg-surface)] text-[var(--text-primary)]"
               }`}
             >
               보기
@@ -116,7 +122,7 @@ export default function TreeDetailPage() {
           <button
             type="button"
             onClick={() => setShowSettings(true)}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-1 hover:bg-slate-100"
+            className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-surface)] px-3 py-1 hover:bg-[var(--bg-muted)]"
           >
             글로벌 설정 / 공유
           </button>

@@ -12,8 +12,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ko">
-      <body className="min-h-screen bg-slate-50 text-slate-900 antialiased">
+    <html lang="ko" suppressHydrationWarning>
+      <head>
+        <meta name="color-scheme" content="light dark" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{document.querySelector('meta[name="color-scheme"]').content=localStorage.getItem("color-scheme")??"light dark"}catch{}`,
+          }}
+        />
+      </head>
+      <body className="min-h-screen bg-[var(--bg-page)] text-[var(--text-primary)] antialiased">
         {children}
       </body>
     </html>
