@@ -146,8 +146,23 @@ export function FamilyTreeCanvas({
         .setCardClickOpen(f3Card)
         .setOnFormCreation(({ cont, form_creator }) => {
           const storeData = f3Chart.store.getData() as unknown as FamilyChartDatum[];
-          const current = storeData.find((d) => d.id === form_creator.datum_id);
-          if (!current || (current as { _new_rel_data?: unknown })._new_rel_data) {
+          const current = storeData.find((d) => d.id === form_creator.datum_id) as
+            | (FamilyChartDatum & {
+                _new_rel_data?: {
+                  rel_type: string;
+                  rel_id?: string;
+                  other_parent_id?: string;
+                };
+              })
+            | undefined;
+          if (!current) return;
+
+          const isNewRel = Boolean(current._new_rel_data);
+          if (
+            isNewRel &&
+            current._new_rel_data?.rel_type !== "son" &&
+            current._new_rel_data?.rel_type !== "daughter"
+          ) {
             return;
           }
 
@@ -155,13 +170,20 @@ export function FamilyTreeCanvas({
             .map((pid) => storeData.find((d) => d.id === pid))
             .filter((d): d is FamilyChartDatum => Boolean(d));
 
-          const father =
-            parentNodes.find((p) => p.data.gender !== "F") ?? parentNodes[0];
+          const father = isNewRel
+            ? storeData.find((d) => d.id === current._new_rel_data?.rel_id) ??
+              parentNodes.find((p) => p.data.gender !== "F") ??
+              parentNodes[0]
+            : parentNodes.find((p) => p.data.gender !== "F") ?? parentNodes[0];
           if (!father) return;
 
-          const currentMother = parentNodes.find(
-            (p) => p.id !== father.id && p.data.gender === "F"
-          );
+          const currentMother = isNewRel
+            ? storeData.find(
+                (d) => d.id === current._new_rel_data?.other_parent_id
+              )
+            : parentNodes.find(
+                (p) => p.id !== father.id && p.data.gender === "F"
+              );
 
           const candidateIds = new Set<string>(father.rels?.spouses ?? []);
           if (currentMother) candidateIds.add(currentMother.id);
@@ -208,10 +230,14 @@ export function FamilyTreeCanvas({
 
           select.addEventListener("change", async () => {
             const nextMotherId = select.value || null;
-            if (currentMother) {
-              currentMother.rels.children = (currentMother.rels.children ?? []).filter(
-                (cid) => cid !== current.id
-              );
+            const prevMotherId = current.rels.parents.find((pid) => pid !== father.id);
+            if (prevMotherId) {
+              const prevMother = storeData.find((d) => d.id === prevMotherId);
+              if (prevMother) {
+                prevMother.rels.children = (prevMother.rels.children ?? []).filter(
+                  (cid) => cid !== current.id
+                );
+              }
             }
             current.rels.parents = (current.rels.parents ?? []).filter(
               (pid) => pid === father.id
@@ -225,6 +251,10 @@ export function FamilyTreeCanvas({
                   nextMother.rels.children.push(current.id);
                 }
               }
+            }
+            if (isNewRel && current._new_rel_data) {
+              current._new_rel_data.other_parent_id = nextMotherId ?? undefined;
+              return;
             }
 
             f3Chart.updateTree({});
