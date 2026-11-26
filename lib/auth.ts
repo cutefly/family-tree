@@ -3,8 +3,17 @@ import { cookies } from "next/headers";
 
 export const SESSION_COOKIE_NAME = "ft_session";
 
+const DEFAULT_SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7;
+
 function getSessionSecret(): string {
-  return process.env.SESSION_SECRET ?? "dev-only-insecure-secret-change-me";
+  const secret = process.env.SESSION_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("SESSION_SECRET must be set in production");
+    }
+    return "dev-only-insecure-secret-change-me";
+  }
+  return secret;
 }
 
 export async function hashPassword(password: string): Promise<string> {
@@ -36,11 +45,16 @@ export async function verifyPassword(
   return crypto.timingSafeEqual(expected, derived);
 }
 
-export function signSessionToken(payload: {
-  userId: string;
-  email: string;
-}): string {
-  const encoded = Buffer.from(JSON.stringify(payload), "utf8").toString(
+export function signSessionToken(
+  payload: { userId: string; email: string },
+  ttlMs: number = DEFAULT_SESSION_TTL_MS
+): string {
+  const fullPayload = {
+    userId: payload.userId,
+    email: payload.email,
+    exp: Date.now() + ttlMs,
+  };
+  const encoded = Buffer.from(JSON.stringify(fullPayload), "utf8").toString(
     "base64url"
   );
   const sig = crypto
@@ -76,7 +90,9 @@ export function verifySessionToken(
     );
     if (
       typeof parsed?.userId === "string" &&
-      typeof parsed?.email === "string"
+      typeof parsed?.email === "string" &&
+      typeof parsed?.exp === "number" &&
+      parsed.exp > Date.now()
     ) {
       return { userId: parsed.userId, email: parsed.email };
     }

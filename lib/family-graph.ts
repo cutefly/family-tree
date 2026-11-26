@@ -19,6 +19,8 @@ export interface FamilyChartPersonData {
 
 export interface FamilyChartDatum {
   id: string;
+  unknown?: boolean;
+  to_add?: boolean;
   data: FamilyChartPersonData;
   rels: {
     parents: string[];
@@ -173,8 +175,10 @@ export function toFamilyChartData(
 }
 
 function parseGender(data: Partial<FamilyChartPersonData>): Gender {
+  if (data.gender === "F") return "FEMALE";
+  if (data.gender === "M") return "MALE";
   if (data.actualGender === "OTHER") return "OTHER";
-  if (data.gender === "F" || data.actualGender === "FEMALE") return "FEMALE";
+  if (data.actualGender === "FEMALE") return "FEMALE";
   return "MALE";
 }
 
@@ -191,13 +195,25 @@ export function fromFamilyChartData(nodes: FamilyChartDatum[]): {
   persons: SyncPersonInput[];
   marriages: Array<{ person1Id: string; person2Id: string }>;
 } {
+  const validNodes = nodes.filter(
+    (node) => node && typeof node.id === "string" && !node.unknown && !node.to_add
+  );
+  const validIdSet = new Set(validNodes.map((n) => n.id));
+
   const genderById = new Map<string, Gender>();
-  for (const node of nodes) {
+  for (const node of validNodes) {
     genderById.set(node.id, parseGender(node.data));
   }
 
-  const persons: SyncPersonInput[] = nodes.map((node) => {
-    const parentIds = (node.rels?.parents ?? []).filter(Boolean);
+  const seenIds = new Set<string>();
+  const persons: SyncPersonInput[] = [];
+  for (const node of validNodes) {
+    if (seenIds.has(node.id)) continue;
+    seenIds.add(node.id);
+
+    const parentIds = (node.rels?.parents ?? []).filter(
+      (pid) => Boolean(pid) && validIdSet.has(pid)
+    );
     let fatherId: string | null = null;
     let motherId: string | null = null;
 
@@ -212,7 +228,7 @@ export function fromFamilyChartData(nodes: FamilyChartDatum[]): {
       }
     }
 
-    return {
+    persons.push({
       id: node.id,
       nameKo: cleanStr(node.data?.nameKo),
       nameHanja: cleanStr(node.data?.nameHanja),
@@ -227,15 +243,15 @@ export function fromFamilyChartData(nodes: FamilyChartDatum[]): {
       memo: cleanStr(node.data?.memo),
       fatherId,
       motherId,
-    };
-  });
+    });
+  }
 
   const marriageSet = new Set<string>();
   const marriages: Array<{ person1Id: string; person2Id: string }> = [];
 
-  for (const node of nodes) {
+  for (const node of validNodes) {
     for (const spouseId of node.rels?.spouses ?? []) {
-      if (!spouseId || spouseId === node.id) continue;
+      if (!spouseId || spouseId === node.id || !validIdSet.has(spouseId)) continue;
       const [person1Id, person2Id] =
         node.id < spouseId ? [node.id, spouseId] : [spouseId, node.id];
       const key = `${person1Id}:${person2Id}`;

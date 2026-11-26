@@ -188,4 +188,19 @@ describe("toFamilyChartData & fromFamilyChartData", () => {
     expect(syncedDaughter?.motherId).toBe("m1");
     expect(synced.marriages).toEqual([{ person1Id: "f1", person2Id: "m1" }]);
   });
+
+  it("respects edited data.gender even when stale actualGender is present and skips unknown nodes", () => {
+    const nodes = toFamilyChartData([mother], [], "BY_ORDER");
+    // Simulate family-chart editTree changing gender from 'F' to 'M'
+    nodes[0].data.gender = "M";
+    const unknownNode = {
+      ...nodes[0],
+      id: "unk-1",
+      unknown: true,
+    } as unknown as (typeof nodes)[0];
+
+    const synced = fromFamilyChartData([...nodes, unknownNode]);
+    expect(synced.persons).toHaveLength(1);
+    expect(synced.persons[0].gender).toBe("MALE");
+  });
 });

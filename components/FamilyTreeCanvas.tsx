@@ -34,6 +34,15 @@ const EDIT_FIELDS = [
   { type: "textarea", label: "메모", id: "memo" },
 ];
 
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
 export function FamilyTreeCanvas({
   persons,
   marriages,
@@ -43,6 +52,10 @@ export function FamilyTreeCanvas({
 }: FamilyTreeCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<ReturnType<typeof f3.createChart> | null>(null);
+  const onGraphChangeRef = useRef(onGraphChange);
+  const skipNextReinitRef = useRef(false);
+
+  onGraphChangeRef.current = onGraphChange;
 
   const [childOrderMode, setChildOrderMode] = useState<ChildOrderMode>(
     tree.childOrderMode
@@ -62,8 +75,19 @@ export function FamilyTreeCanvas({
   }, [tree.childOrderMode]);
 
   useEffect(() => {
+    if (skipNextReinitRef.current) {
+      skipNextReinitRef.current = false;
+      return;
+    }
+
     const container = containerRef.current;
     if (!container) return;
+
+    if (mode === "view" && chartData.length === 0) {
+      container.innerHTML = "";
+      chartRef.current = null;
+      return;
+    }
 
     container.innerHTML = "";
 
@@ -74,9 +98,9 @@ export function FamilyTreeCanvas({
             {
               id: crypto.randomUUID(),
               data: {
-                displayName: tree.surnameKo ? `${tree.bonKo ?? ""} ${tree.surnameKo}씨`.trim() : "시조",
+                displayName: "시조",
                 hanjaName: "",
-                nameKo: "",
+                nameKo: "시조",
                 nameHanja: "",
                 surnameKo: tree.surnameKo ?? "",
                 surnameHanja: tree.surnameHanja ?? "",
@@ -114,11 +138,12 @@ export function FamilyTreeCanvas({
           surnameKo: d.data.surnameKo ?? null,
           bonKo: d.data.bonKo ?? null,
         });
-        return secondary ? `${primary} (${secondary})` : primary;
+        const text = secondary ? `${primary} (${secondary})` : primary;
+        return escapeHtml(text);
       },
       (d: { data: Record<string, string> }) => {
         const parts = [d.data.birthDate, d.data.deathDate].filter(Boolean);
-        return parts.join(" ~ ");
+        return escapeHtml(parts.join(" ~ "));
       },
     ]);
 
@@ -127,14 +152,18 @@ export function FamilyTreeCanvas({
         .editTree()
         .setFields(EDIT_FIELDS)
         .setEditFirst(true)
+        .setCardClickOpen(f3Card)
         .setOnChange(async () => {
-          if (!onGraphChange) return;
+          const handler = onGraphChangeRef.current;
+          if (!handler) return;
           try {
             setSaving(true);
             setErrorMsg(null);
             const exported = f3EditTree.exportData() as unknown as FamilyChartDatum[];
-            await onGraphChange(exported);
+            skipNextReinitRef.current = true;
+            await handler(exported);
           } catch (err) {
+            skipNextReinitRef.current = false;
             setErrorMsg(
               err instanceof Error ? err.message : "저장 중 오류가 발생했습니다."
             );
@@ -142,11 +171,6 @@ export function FamilyTreeCanvas({
             setSaving(false);
           }
         });
-
-      f3Card.setOnCardClick((e: MouseEvent, d: f3.TreeDatum) => {
-        f3EditTree.open(d.data);
-        f3Card.onCardClickDefault(e, d);
-      });
     }
 
     if (tree.rootPersonId) {
@@ -172,7 +196,6 @@ export function FamilyTreeCanvas({
     tree.bonHanja,
     tree.surnameKo,
     tree.surnameHanja,
-    onGraphChange,
   ]);
 
   return (
@@ -244,12 +267,18 @@ export function FamilyTreeCanvas({
         </div>
       </div>
 
-      <div
-        ref={containerRef}
-        id="FamilyChart"
-        className="f3 relative flex-1 bg-slate-50"
-        style={{ minHeight: "600px" }}
-      />
+      {mode === "view" && chartData.length === 0 ? (
+        <div className="flex flex-1 items-center justify-center bg-slate-50 text-sm text-slate-500">
+          등록된 인물이 없습니다.
+        </div>
+      ) : (
+        <div
+          ref={containerRef}
+          id="FamilyChart"
+          className="f3 relative flex-1 bg-slate-50"
+          style={{ minHeight: "600px" }}
+        />
+      )}
     </div>
   );
 }

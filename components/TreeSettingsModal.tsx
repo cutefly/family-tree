@@ -26,6 +26,7 @@ export function TreeSettingsModal({
   const [shareToken, setShareToken] = useState(tree.shareToken);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const shareUrl =
     typeof window !== "undefined"
@@ -35,6 +36,7 @@ export function TreeSettingsModal({
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
+    setError(null);
     try {
       const res = await fetch(`/api/trees/${tree.id}`, {
         method: "PATCH",
@@ -49,33 +51,48 @@ export function TreeSettingsModal({
           isShared,
         }),
       });
-      if (res.ok) {
-        const json = await res.json();
-        onUpdated(json.tree);
-        onClose();
+      const json = await res.json();
+      if (!res.ok) {
+        setError(json.error ?? "설정 저장에 실패했습니다.");
+        return;
       }
+      onUpdated(json.tree);
+      onClose();
+    } catch {
+      setError("설정 저장 중 네트워크 오류가 발생했습니다.");
     } finally {
       setSaving(false);
     }
   }
 
   async function handleRegenerateToken() {
-    const res = await fetch(`/api/trees/${tree.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ regenerateShareToken: true }),
-    });
-    if (res.ok) {
+    setError(null);
+    try {
+      const res = await fetch(`/api/trees/${tree.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ regenerateShareToken: true }),
+      });
       const json = await res.json();
+      if (!res.ok) {
+        setError(json.error ?? "토큰 재발급에 실패했습니다.");
+        return;
+      }
       setShareToken(json.tree.shareToken);
       onUpdated(json.tree);
+    } catch {
+      setError("토큰 재발급 중 네트워크 오류가 발생했습니다.");
     }
   }
 
   async function handleCopy() {
-    await navigator.clipboard.writeText(shareUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setError("클립보드 복사에 실패했습니다. URL을 직접 복사해 주세요.");
+    }
   }
 
   return (
@@ -189,6 +206,8 @@ export function TreeSettingsModal({
               </div>
             )}
           </div>
+
+          {error && <p className="text-red-600">{error}</p>}
 
           <div className="flex justify-end gap-2 pt-2">
             <button

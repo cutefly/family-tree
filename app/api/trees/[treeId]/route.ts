@@ -45,8 +45,21 @@ export async function PATCH(request: Request, { params }: Params) {
     data.childOrderMode = body.childOrderMode;
   }
   if ("rootPersonId" in body) {
-    data.rootPersonId =
-      typeof body.rootPersonId === "string" ? body.rootPersonId : null;
+    if (typeof body.rootPersonId === "string" && body.rootPersonId) {
+      const target = await prisma.person.findUnique({
+        where: { id: body.rootPersonId },
+        select: { treeId: true },
+      });
+      if (!target || target.treeId !== treeId) {
+        return NextResponse.json(
+          { error: "중심 인물이 현재 가계도에 존재하지 않습니다." },
+          { status: 400 }
+        );
+      }
+      data.rootPersonId = body.rootPersonId;
+    } else {
+      data.rootPersonId = null;
+    }
   }
   if (typeof body.isShared === "boolean") {
     data.isShared = body.isShared;

@@ -17,6 +17,24 @@ export async function POST(request: Request, { params }: Params) {
       String(body.person2Id ?? "")
     );
 
+    const members = await prisma.person.findMany({
+      where: { treeId, id: { in: [person1Id, person2Id] } },
+      select: { id: true },
+    });
+    if (members.length !== 2) {
+      throw new ValidationError("배우자 인물이 현재 가계도에 존재하지 않습니다.");
+    }
+
+    const existing = await prisma.marriage.findFirst({
+      where: { treeId, person1Id, person2Id },
+    });
+    if (existing) {
+      return NextResponse.json(
+        { error: "이미 등록된 배우자 관계입니다." },
+        { status: 409 }
+      );
+    }
+
     const marriage = await prisma.marriage.create({
       data: { treeId, person1Id, person2Id },
     });

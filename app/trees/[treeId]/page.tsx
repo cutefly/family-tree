@@ -17,20 +17,29 @@ export default function TreeDetailPage() {
   const params = useParams<{ treeId: string }>();
   const router = useRouter();
   const [tree, setTree] = useState<FullTree | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [mode, setMode] = useState<"edit" | "view">("edit");
   const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
     fetch(`/api/trees/${params.treeId}`)
-      .then((res) => {
+      .then(async (res) => {
         if (res.status === 401) {
           router.replace("/login");
           return null;
         }
-        return res.json();
+        const json = await res.json();
+        if (!res.ok) {
+          setLoadError(json.error ?? "가계도를 불러올 수 없습니다.");
+          return null;
+        }
+        return json;
       })
       .then((json) => {
         if (json?.tree) setTree(json.tree);
+      })
+      .catch(() => {
+        setLoadError("가계도를 불러오는 중 네트워크 오류가 발생했습니다.");
       });
   }, [params.treeId, router]);
 
@@ -49,6 +58,17 @@ export default function TreeDetailPage() {
     },
     [params.treeId]
   );
+
+  if (loadError) {
+    return (
+      <div className="p-6 text-sm text-red-600">
+        {loadError}{" "}
+        <Link href="/trees" className="ml-2 text-blue-600 underline">
+          목록으로
+        </Link>
+      </div>
+    );
+  }
 
   if (!tree) {
     return <div className="p-6 text-sm text-slate-500">가계도를 불러오는 중...</div>;

@@ -23,10 +23,16 @@ describe("session token", () => {
     });
   });
 
-  it("returns null for tampered or malformed tokens", () => {
+  it("returns null for tampered, malformed, or expired tokens", () => {
     const token = signSessionToken({ userId: "u-1", email: "a@example.com" });
     const tampered = token.slice(0, -1) + (token.endsWith("a") ? "b" : "a");
     expect(verifySessionToken(tampered)).toBeNull();
     expect(verifySessionToken("invalid")).toBeNull();
+
+    const expired = signSessionToken(
+      { userId: "u-1", email: "a@example.com" },
+      -1000
+    );
+    expect(verifySessionToken(expired)).toBeNull();
   });
 });

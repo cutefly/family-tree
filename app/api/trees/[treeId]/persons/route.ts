@@ -27,6 +27,14 @@ export async function POST(request: Request, { params }: Params) {
     const fatherId = typeof body.fatherId === "string" ? body.fatherId : null;
     const motherId = typeof body.motherId === "string" ? body.motherId : null;
 
+    const treeIds = new Set(existing.map((p) => p.id));
+    if (
+      (fatherId && !treeIds.has(fatherId)) ||
+      (motherId && !treeIds.has(motherId))
+    ) {
+      throw new ValidationError("부모 인물이 현재 가계도에 존재하지 않습니다.");
+    }
+
     validateParentLinks([...existing, { id: newId, fatherId, motherId }]);
 
     const person = await prisma.person.create({

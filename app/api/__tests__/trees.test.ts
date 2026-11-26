@@ -23,6 +23,8 @@ const mockPrisma = {
     createMany: vi.fn(),
     create: vi.fn(),
     delete: vi.fn(),
+    findUnique: vi.fn(),
+    findFirst: vi.fn(),
   },
   $transaction: vi.fn(),
 };
@@ -130,5 +132,114 @@ describe("Trees & Share API routes", () => {
     const json = await res.json();
     expect(json.tree.title).toBe("김해 김씨 가계도");
     expect(json.tree.ownerId).toBeUndefined();
+  });
+
+  it("returns 404 when DELETE /persons/[personId] targets a person in another tree (IDOR guard)", async () => {
+    mockGetSessionUser.mockResolvedValue({ userId: "user-b", email: "b@test.com" });
+    mockPrisma.familyTree.findUnique.mockResolvedValue({
+      id: "tree-b",
+      ownerId: "user-b",
+    });
+    mockPrisma.person.findUnique.mockResolvedValue({
+      id: "victim-person",
+      treeId: "tree-a",
+    });
+
+    const { DELETE } = await import(
+      "@/app/api/trees/[treeId]/persons/[personId]/route"
+    );
+    const res = await DELETE(
+      new Request("http://localhost/api/trees/tree-b/persons/victim-person", {
+        method: "DELETE",
+      }),
+      { params: Promise.resolve({ treeId: "tree-b", personId: "victim-person" }) }
+    );
+    expect(res.status).toBe(404);
+    expect(mockPrisma.person.delete).not.toHaveBeenCalled();
+  });
+
+  it("returns 404 when DELETE /marriages/[marriageId] targets a marriage in another tree (IDOR guard)", async () => {
+    mockGetSessionUser.mockResolvedValue({ userId: "user-b", email: "b@test.com" });
+    mockPrisma.familyTree.findUnique.mockResolvedValue({
+      id: "tree-b",
+      ownerId: "user-b",
+    });
+    mockPrisma.marriage.findUnique.mockResolvedValue({
+      id: "victim-marriage",
+      treeId: "tree-a",
+    });
+
+    const { DELETE } = await import(
+      "@/app/api/trees/[treeId]/marriages/[marriageId]/route"
+    );
+    const res = await DELETE(
+      new Request("http://localhost/api/trees/tree-b/marriages/victim-marriage", {
+        method: "DELETE",
+      }),
+      {
+        params: Promise.resolve({
+          treeId: "tree-b",
+          marriageId: "victim-marriage",
+        }),
+      }
+    );
+    expect(res.status).toBe(404);
+    expect(mockPrisma.marriage.delete).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 when PUT /graph attempts to overwrite a person belonging to another tree", async () => {
+    mockGetSessionUser.mockResolvedValue({ userId: "user-b", email: "b@test.com" });
+    mockPrisma.familyTree.findUnique.mockResolvedValue({
+      id: "tree-b",
+      ownerId: "user-b",
+    });
+    mockPrisma.person.findMany.mockResolvedValue([{ id: "victim-p1" }]);
+
+    const { PUT } = await import("@/app/api/trees/[treeId]/graph/route");
+    const res = await PUT(
+      new Request("http://localhost/api/trees/tree-b/graph", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nodes: [
+            {
+              id: "victim-p1",
+              data: { nameKo: "탈취", gender: "M" },
+              rels: { parents: [], children: [], spouses: [] },
+            },
+          ],
+        }),
+      }),
+      { params: Promise.resolve({ treeId: "tree-b" }) }
+    );
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 400 when PUT /graph references a dangling parent ID not in submitted nodes", async () => {
+    mockGetSessionUser.mockResolvedValue({ userId: "user-a", email: "a@test.com" });
+    mockPrisma.familyTree.findUnique.mockResolvedValue({
+      id: "tree-1",
+      ownerId: "user-a",
+    });
+    mockPrisma.person.findMany.mockResolvedValue([]);
+
+    const { PUT } = await import("@/app/api/trees/[treeId]/graph/route");
+    const res = await PUT(
+      new Request("http://localhost/api/trees/tree-1/graph", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nodes: [
+            {
+              id: "p1",
+              data: { nameKo: "홍길동", gender: "M" },
+              rels: { parents: ["other-tree-parent"], children: [], spouses: [] },
+            },
+          ],
+        }),
+      }),
+      { params: Promise.resolve({ treeId: "tree-1" }) }
+    );
+    expect(res.status).toBe(400);
   });
 });

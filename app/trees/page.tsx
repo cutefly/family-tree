@@ -19,6 +19,7 @@ export default function TreesPage() {
   const router = useRouter();
   const [trees, setTrees] = useState<TreeSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [bonKo, setBonKo] = useState("");
   const [bonHanja, setBonHanja] = useState("");
@@ -42,15 +43,18 @@ export default function TreesPage() {
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
+    setError(null);
     const res = await fetch("/api/trees", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title, bonKo, bonHanja, surnameKo, surnameHanja }),
     });
-    if (res.ok) {
-      const json = await res.json();
-      router.push(`/trees/${json.tree.id}`);
+    const json = await res.json();
+    if (!res.ok) {
+      setError(json.error ?? "가계도 생성에 실패했습니다.");
+      return;
     }
+    router.push(`/trees/${json.tree.id}`);
   }
 
   async function handleLogout() {
@@ -112,6 +116,7 @@ export default function TreesPage() {
             생성
           </button>
         </form>
+        {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
       </section>
 
       {loading ? (

@@ -19,6 +19,25 @@ export async function PUT(request: Request, { params }: Params) {
   try {
     const body = await request.json();
     const nodes: FamilyChartDatum[] = Array.isArray(body.nodes) ? body.nodes : [];
+
+    // Check raw parent/spouse references before fromFamilyChartData strips unknown/dangling IDs
+    const rawIdSet = new Set(
+      nodes.filter((n) => n && typeof n.id === "string" && !n.unknown && !n.to_add).map((n) => n.id)
+    );
+    for (const node of nodes) {
+      if (!node || node.unknown || node.to_add) continue;
+      for (const pid of node.rels?.parents ?? []) {
+        if (pid && !rawIdSet.has(pid)) {
+          throw new ValidationError("부모 인물이 가계도에 존재하지 않습니다.");
+        }
+      }
+      for (const sid of node.rels?.spouses ?? []) {
+        if (sid && !rawIdSet.has(sid)) {
+          throw new ValidationError("배우자 인물이 가계도에 존재하지 않습니다.");
+        }
+      }
+    }
+
     const { persons, marriages } = fromFamilyChartData(nodes);
 
     for (const p of persons) {
@@ -32,6 +51,18 @@ export async function PUT(request: Request, { params }: Params) {
     });
 
     const keepIds = persons.map((p) => p.id);
+    if (keepIds.length > 0) {
+      const foreignPersons = await prisma.person.findMany({
+        where: { id: { in: keepIds }, treeId: { not: treeId } },
+        select: { id: true },
+      });
+      if (foreignPersons.length > 0) {
+        return NextResponse.json(
+          { error: "다른 가계도의 인물 ID를 덮어쓸 수 없습니다." },
+          { status: 403 }
+        );
+      }
+    }
 
     await prisma.$transaction(async (tx) => {
       await tx.marriage.deleteMany({ where: { treeId } });
@@ -42,6 +73,13 @@ export async function PUT(request: Request, { params }: Params) {
           ...(keepIds.length > 0 ? { id: { notIn: keepIds } } : {}),
         },
       });
+
+      if (auth.tree.rootPersonId && !rawIdSet.has(auth.tree.rootPersonId)) {
+        await tx.familyTree.update({
+          where: { id: treeId },
+          data: { rootPersonId: null },
+        });
+      }
 
       // Upsert persons with null parent FKs first so new nodes exist before linking
       for (const p of persons) {

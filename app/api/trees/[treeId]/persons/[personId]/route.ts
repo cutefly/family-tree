@@ -35,6 +35,13 @@ export async function PATCH(request: Request, { params }: Params) {
 
     const nextFatherId = "fatherId" in body ? body.fatherId : target.fatherId;
     const nextMotherId = "motherId" in body ? body.motherId : target.motherId;
+    const treeIds = new Set(existing.map((p) => p.id));
+    if (
+      (nextFatherId && !treeIds.has(nextFatherId)) ||
+      (nextMotherId && !treeIds.has(nextMotherId))
+    ) {
+      throw new ValidationError("부모 인물이 현재 가계도에 존재하지 않습니다.");
+    }
 
     validateParentLinks(
       existing.map((p) =>
@@ -96,6 +103,14 @@ export async function DELETE(_request: Request, { params }: Params) {
   const { treeId, personId } = await params;
   const auth = await requireOwnedTree(treeId);
   if (auth.error) return auth.error;
+
+  const target = await prisma.person.findUnique({ where: { id: personId } });
+  if (!target || target.treeId !== treeId) {
+    return NextResponse.json(
+      { error: "인물을 찾을 수 없습니다." },
+      { status: 404 }
+    );
+  }
 
   await prisma.$transaction(async (tx) => {
     await tx.person.delete({ where: { id: personId } });
