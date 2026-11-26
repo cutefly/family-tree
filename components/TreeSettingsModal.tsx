@@ -27,6 +27,7 @@ export function TreeSettingsModal({
   const [isShared, setIsShared] = useState(tree.isShared);
   const [shareToken, setShareToken] = useState(tree.shareToken);
   const [saving, setSaving] = useState(false);
+  const [savingShare, setSavingShare] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -71,23 +72,53 @@ export function TreeSettingsModal({
     }
   }
 
-  async function handleRegenerateToken() {
+  async function handleToggleShare(nextShared: boolean) {
+    setIsShared(nextShared);
+    setSavingShare(true);
     setError(null);
     try {
       const res = await fetch(`/api/trees/${tree.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ regenerateShareToken: true }),
+        body: JSON.stringify({ isShared: nextShared }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setIsShared(!nextShared);
+        setError(json.error ?? "공유 설정 변경에 실패했습니다.");
+        return;
+      }
+      setShareToken(json.tree.shareToken);
+      onUpdated(json.tree);
+    } catch {
+      setIsShared(!nextShared);
+      setError("공유 설정 변경 중 네트워크 오류가 발생했습니다.");
+    } finally {
+      setSavingShare(false);
+    }
+  }
+
+  async function handleRegenerateToken() {
+    setSavingShare(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/trees/${tree.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ regenerateShareToken: true, isShared: true }),
       });
       const json = await res.json();
       if (!res.ok) {
         setError(json.error ?? "토큰 재발급에 실패했습니다.");
         return;
       }
+      setIsShared(Boolean(json.tree.isShared));
       setShareToken(json.tree.shareToken);
       onUpdated(json.tree);
     } catch {
       setError("토큰 재발급 중 네트워크 오류가 발생했습니다.");
+    } finally {
+      setSavingShare(false);
     }
   }
 
@@ -184,10 +215,16 @@ export function TreeSettingsModal({
               <label className="flex items-center gap-2 font-medium">
                 <input
                   type="checkbox"
+                  disabled={savingShare}
                   checked={isShared}
-                  onChange={(e) => setIsShared(e.target.checked)}
+                  onChange={(e) => handleToggleShare(e.target.checked)}
                 />
                 읽기 전용 공유 링크 활성화
+                {savingShare && (
+                  <span className="text-xs font-normal text-[var(--text-secondary)]">
+                    (적용 중...)
+                  </span>
+                )}
               </label>
               {isShared && (
                 <div className="mt-2 flex items-center gap-2">
