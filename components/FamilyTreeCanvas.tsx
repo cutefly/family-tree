@@ -249,7 +249,7 @@ export function FamilyTreeCanvas({
             closeBtn.addEventListener("click", () => {
               nativeCloseBtn.click();
             });
-            buttonsEl.appendChild(closeBtn);
+            buttonsEl.prepend(closeBtn);
           }
 
           const select = cont.querySelector<HTMLSelectElement>(
