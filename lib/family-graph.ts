@@ -15,6 +15,7 @@ export interface FamilyChartPersonData {
   deathDate: string;
   birthOrder: string;
   memo: string;
+  motherId?: string;
 }
 
 export interface FamilyChartDatum {
@@ -164,6 +165,7 @@ export function toFamilyChartData(
         deathDate: person.deathDate ?? "",
         birthOrder: person.birthOrder != null ? String(person.birthOrder) : "",
         memo: person.memo ?? "",
+        motherId: person.motherId ?? "",
       },
       rels: {
         parents,
@@ -226,6 +228,11 @@ export function fromFamilyChartData(nodes: FamilyChartDatum[]): {
       } else if (!motherId) {
         motherId = pid;
       }
+    }
+
+    const explicitMotherId = cleanStr(node.data?.motherId);
+    if (explicitMotherId && validIdSet.has(explicitMotherId) && explicitMotherId !== fatherId) {
+      motherId = explicitMotherId;
     }
 
     persons.push({

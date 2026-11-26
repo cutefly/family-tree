@@ -139,39 +139,19 @@ export function FamilyTreeCanvas({
     ]);
 
     if (mode === "edit") {
-      const f3EditTree = f3Chart
-        .editTree()
-        .setFields(EDIT_FIELDS)
-        .setEditFirst(true)
-        .setCardClickOpen(f3Card)
-        .setOnFormCreation(({ cont, form_creator }) => {
+      const motherSelectField = {
+        type: "select",
+        label: "어머니 선택",
+        id: "motherId",
+        placeholder: "선택 안 함",
+        optionCreator: (datum: FamilyChartDatum & { _new_rel_data?: { rel_type: string; rel_id?: string; other_parent_id?: string } }) => {
           const storeData = f3Chart.store.getData() as unknown as FamilyChartDatum[];
-          const current = storeData.find((d) => d.id === form_creator.datum_id) as
-            | (FamilyChartDatum & {
-                _new_rel_data?: {
-                  rel_type: string;
-                  rel_id?: string;
-                  other_parent_id?: string;
-                };
-              })
-            | undefined;
-          if (!current) return;
-
-          const isNewRel = Boolean(current._new_rel_data);
-          if (
-            isNewRel &&
-            current._new_rel_data?.rel_type !== "son" &&
-            current._new_rel_data?.rel_type !== "daughter"
-          ) {
-            return;
-          }
-
-          const parentNodes = (current.rels?.parents ?? [])
+          const parentNodes = (datum.rels?.parents ?? [])
             .map((pid) => storeData.find((d) => d.id === pid))
             .filter((d): d is FamilyChartDatum => Boolean(d));
 
-          const relParent = current._new_rel_data?.rel_id
-            ? storeData.find((d) => d.id === current._new_rel_data?.rel_id)
+          const relParent = datum._new_rel_data?.rel_id
+            ? storeData.find((d) => d.id === datum._new_rel_data?.rel_id)
             : undefined;
           const allParents = [...parentNodes];
           if (relParent && !allParents.some((p) => p.id === relParent.id)) {
@@ -180,122 +160,81 @@ export function FamilyTreeCanvas({
 
           const father =
             allParents.find((p) => p.data.gender !== "F") ?? allParents[0];
-          if (!father) return;
+          if (!father) return [];
 
-          const currentMother = isNewRel
-            ? allParents.find(
-                (p) =>
-                  p.id !== father.id &&
-                  (p.id === current._new_rel_data?.other_parent_id ||
-                    p.data.gender === "F")
-              )
-            : allParents.find(
-                (p) => p.id !== father.id && p.data.gender === "F"
-              );
+          const currentMotherId =
+            datum._new_rel_data?.other_parent_id ||
+            allParents.find((p) => p.id !== father.id && p.data.gender === "F")?.id ||
+            datum.data?.motherId ||
+            "";
 
           const candidateIds = new Set<string>(father.rels?.spouses ?? []);
-          if (currentMother) candidateIds.add(currentMother.id);
+          if (currentMotherId) candidateIds.add(currentMotherId);
 
-          const candidates = Array.from(candidateIds)
+          return Array.from(candidateIds)
             .map((id) => storeData.find((d) => d.id === id))
-            .filter((d): d is FamilyChartDatum => Boolean(d));
-
-          if (candidates.length < 2 && (candidates.length === 0 || currentMother)) {
-            return;
-          }
-
-          const existing = cont.querySelector(".f3-mother-select-field");
-          if (existing) existing.remove();
-
-          const wrapper = document.createElement("div");
-          wrapper.className = "f3-form-field f3-mother-select-field";
-
-          const label = document.createElement("label");
-          label.textContent = "어머니 선택";
-          wrapper.appendChild(label);
-
-          const select = document.createElement("select");
-          const emptyOpt = document.createElement("option");
-          emptyOpt.value = "";
-          emptyOpt.textContent = "선택 안 함";
-          select.appendChild(emptyOpt);
-
-          for (const cand of candidates) {
-            const opt = document.createElement("option");
-            opt.value = cand.id;
-            const { primary, secondary } = formatPersonDisplayName({
-              nameKo: cand.data.nameKo || null,
-              nameHanja: cand.data.nameHanja || null,
-              surnameKo: cand.data.surnameKo || null,
-              bonKo: cand.data.bonKo || null,
+            .filter((d): d is FamilyChartDatum => Boolean(d))
+            .map((cand) => {
+              const { primary, secondary } = formatPersonDisplayName({
+                nameKo: cand.data.nameKo || null,
+                nameHanja: cand.data.nameHanja || null,
+                surnameKo: cand.data.surnameKo || null,
+                bonKo: cand.data.bonKo || null,
+              });
+              return {
+                value: cand.id,
+                label: secondary ? `${primary} (${secondary})` : primary,
+              };
             });
-            opt.textContent = secondary ? `${primary} (${secondary})` : primary;
-            if (currentMother?.id === cand.id) {
-              opt.selected = true;
-            }
-            select.appendChild(opt);
-          }
+        },
+      };
 
-          select.addEventListener("change", async () => {
-            const nextMotherId = select.value || null;
-            const prevMotherId = current.rels.parents.find((pid) => pid !== father.id);
-            if (prevMotherId) {
-              const prevMother = storeData.find((d) => d.id === prevMotherId);
-              if (prevMother) {
-                prevMother.rels.children = (prevMother.rels.children ?? []).filter(
-                  (cid) => cid !== current.id
+      const f3EditTree = f3Chart
+        .editTree()
+        .setFields([motherSelectField, ...EDIT_FIELDS] as unknown as string[])
+        .setEditFirst(true)
+        .setCardClickOpen(f3Card)
+        .setOnChange(async () => {
+          // Sync rels.parents and mother.rels.children with any motherId change from the select field
+          const storeData = f3Chart.store.getData() as unknown as FamilyChartDatum[];
+          let relsUpdated = false;
+          for (const node of storeData) {
+            if (node.unknown || node.to_add) continue;
+            const selectedMotherId = node.data?.motherId || "";
+            const parentNodes = (node.rels?.parents ?? [])
+              .map((pid) => storeData.find((d) => d.id === pid))
+              .filter((d): d is FamilyChartDatum => Boolean(d));
+            const father = parentNodes.find((p) => p.data.gender !== "F");
+            if (!father) continue;
+            const currentMother = parentNodes.find(
+              (p) => p.id !== father.id && p.data.gender === "F"
+            );
+            if ((currentMother?.id ?? "") !== selectedMotherId) {
+              if (currentMother) {
+                currentMother.rels.children = (currentMother.rels.children ?? []).filter(
+                  (cid) => cid !== node.id
                 );
               }
-            }
-            current.rels.parents = (current.rels.parents ?? []).filter(
-              (pid) => pid === father.id
-            );
-            if (nextMotherId) {
-              const nextMother = storeData.find((d) => d.id === nextMotherId);
-              if (nextMother) {
-                current.rels.parents.push(nextMother.id);
-                nextMother.rels.children = nextMother.rels.children ?? [];
-                if (!nextMother.rels.children.includes(current.id)) {
-                  nextMother.rels.children.push(current.id);
+              node.rels.parents = (node.rels.parents ?? []).filter(
+                (pid) => pid === father.id
+              );
+              if (selectedMotherId) {
+                const nextMother = storeData.find((d) => d.id === selectedMotherId);
+                if (nextMother) {
+                  node.rels.parents.push(nextMother.id);
+                  nextMother.rels.children = nextMother.rels.children ?? [];
+                  if (!nextMother.rels.children.includes(node.id)) {
+                    nextMother.rels.children.push(node.id);
+                  }
                 }
               }
+              relsUpdated = true;
             }
-            if (isNewRel && current._new_rel_data) {
-              current._new_rel_data.other_parent_id = nextMotherId ?? undefined;
-              return;
-            }
-
-            f3Chart.updateTree({});
-            const handler = onGraphChangeRef.current;
-            if (!handler) return;
-            try {
-              setSaving(true);
-              setErrorMsg(null);
-              const exported = f3EditTree.exportData() as unknown as FamilyChartDatum[];
-              skipNextDataSyncRef.current = true;
-              await handler(exported);
-            } catch (err) {
-              skipNextDataSyncRef.current = false;
-              setErrorMsg(
-                err instanceof Error ? err.message : "저장 중 오류가 발생했습니다."
-              );
-            } finally {
-              setSaving(false);
-            }
-          });
-
-          const firstFieldEl = cont.querySelector(".f3-form-field");
-          const buttonsEl = cont.querySelector(".f3-form-buttons");
-          if (firstFieldEl && firstFieldEl.parentNode) {
-            firstFieldEl.parentNode.insertBefore(wrapper, firstFieldEl);
-          } else if (buttonsEl && buttonsEl.parentNode) {
-            buttonsEl.parentNode.insertBefore(wrapper, buttonsEl);
-          } else {
-            const formEl = cont.querySelector("form");
-            formEl?.appendChild(wrapper);
           }
-        })
-        .setOnChange(async () => {
+          if (relsUpdated) {
+            f3Chart.updateTree({});
+          }
+
           const handler = onGraphChangeRef.current;
           if (!handler) return;
           try {
