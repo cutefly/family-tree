@@ -170,18 +170,26 @@ export function FamilyTreeCanvas({
             .map((pid) => storeData.find((d) => d.id === pid))
             .filter((d): d is FamilyChartDatum => Boolean(d));
 
-          const father = isNewRel
-            ? storeData.find((d) => d.id === current._new_rel_data?.rel_id) ??
-              parentNodes.find((p) => p.data.gender !== "F") ??
-              parentNodes[0]
-            : parentNodes.find((p) => p.data.gender !== "F") ?? parentNodes[0];
+          const relParent = current._new_rel_data?.rel_id
+            ? storeData.find((d) => d.id === current._new_rel_data?.rel_id)
+            : undefined;
+          const allParents = [...parentNodes];
+          if (relParent && !allParents.some((p) => p.id === relParent.id)) {
+            allParents.push(relParent);
+          }
+
+          const father =
+            allParents.find((p) => p.data.gender !== "F") ?? allParents[0];
           if (!father) return;
 
           const currentMother = isNewRel
-            ? storeData.find(
-                (d) => d.id === current._new_rel_data?.other_parent_id
+            ? allParents.find(
+                (p) =>
+                  p.id !== father.id &&
+                  (p.id === current._new_rel_data?.other_parent_id ||
+                    p.data.gender === "F")
               )
-            : parentNodes.find(
+            : allParents.find(
                 (p) => p.id !== father.id && p.data.gender === "F"
               );
 
@@ -276,8 +284,11 @@ export function FamilyTreeCanvas({
             }
           });
 
+          const firstFieldEl = cont.querySelector(".f3-form-field");
           const buttonsEl = cont.querySelector(".f3-form-buttons");
-          if (buttonsEl && buttonsEl.parentNode) {
+          if (firstFieldEl && firstFieldEl.parentNode) {
+            firstFieldEl.parentNode.insertBefore(wrapper, firstFieldEl);
+          } else if (buttonsEl && buttonsEl.parentNode) {
             buttonsEl.parentNode.insertBefore(wrapper, buttonsEl);
           } else {
             const formEl = cont.querySelector("form");
