@@ -67,6 +67,10 @@ export function FamilyTreeCanvas({
   const [progenyDepth, setProgenyDepth] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<{
+    label: string;
+    onConfirm: () => void;
+  } | null>(null);
 
   const chartData = useMemo(
     () => toFamilyChartData(persons, marriages, childOrderMode),
@@ -240,6 +244,23 @@ export function FamilyTreeCanvas({
           } else if (select.options.length < 3) {
             fieldEl.style.display = "none";
           }
+        })
+        .setOnDelete((datum, deletePerson, postSubmit) => {
+          const data = (datum as unknown as FamilyChartDatum).data;
+          const { primary, secondary } = formatPersonDisplayName({
+            nameKo: data?.nameKo || null,
+            nameHanja: data?.nameHanja || null,
+            surnameKo: data?.surnameKo || null,
+            bonKo: data?.bonKo || null,
+          });
+          const label = secondary ? `${primary} (${secondary})` : primary;
+          setPendingDelete({
+            label,
+            onConfirm: () => {
+              deletePerson();
+              postSubmit({});
+            },
+          });
         })
         .setOnChange(async () => {
           // Sync rels.parents and mother.rels.children with any motherId change from the select field
@@ -419,6 +440,44 @@ export function FamilyTreeCanvas({
           className="f3 relative flex-1 bg-[var(--bg-page)]"
           style={{ minHeight: "600px" }}
         />
+      )}
+
+      {pendingDelete && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+        >
+          <div className="w-full max-w-sm rounded-xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-5 text-[var(--text-primary)] shadow-xl">
+            <h3 className="text-base font-semibold">인물 삭제 확인</h3>
+            <p className="mt-2 text-sm text-[var(--text-secondary)]">
+              <strong className="font-semibold text-[var(--text-primary)]">
+                {pendingDelete.label}
+              </strong>{" "}
+              항목을 삭제하시겠습니까?
+            </p>
+            <div className="mt-5 flex justify-end gap-2 text-sm">
+              <button
+                type="button"
+                onClick={() => setPendingDelete(null)}
+                className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-surface)] px-4 py-1.5 hover:bg-[var(--bg-muted)]"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const confirmFn = pendingDelete.onConfirm;
+                  setPendingDelete(null);
+                  confirmFn();
+                }}
+                className="rounded-lg bg-red-600 px-4 py-1.5 font-medium text-white hover:bg-red-700"
+              >
+                삭제
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
