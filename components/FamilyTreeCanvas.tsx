@@ -235,6 +235,23 @@ export function FamilyTreeCanvas({
         .setEditFirst(true)
         .setCardClickOpen(f3Card)
         .setOnFormCreation(({ cont }) => {
+          const buttonsEl = cont.querySelector<HTMLElement>(".f3-form-buttons");
+          const nativeCloseBtn = cont.querySelector<HTMLElement>(".f3-close-btn");
+          if (
+            buttonsEl &&
+            nativeCloseBtn &&
+            !buttonsEl.querySelector(".f3-form-close-btn")
+          ) {
+            const closeBtn = document.createElement("button");
+            closeBtn.type = "button";
+            closeBtn.className = "f3-form-close-btn";
+            closeBtn.textContent = "Close";
+            closeBtn.addEventListener("click", () => {
+              nativeCloseBtn.click();
+            });
+            buttonsEl.appendChild(closeBtn);
+          }
+
           const select = cont.querySelector<HTMLSelectElement>(
             'select[name="motherId"]'
           );

@@ -66,6 +66,7 @@
   background-color: var(--bg-surface);
   color: var(--text-primary);
   border-left: 1px solid var(--border-color);
+  z-index: 30;
 }
 
 #FamilyChart .f3-form-title,
@@ -84,7 +85,8 @@
   border-color: var(--border-color);
 }
 
-#FamilyChart .f3-cancel-btn {
+#FamilyChart .f3-cancel-btn,
+#FamilyChart .f3-form-close-btn {
   background-color: var(--bg-muted);
   color: var(--text-primary);
 }
