@@ -53,7 +53,7 @@ export function FamilyTreeCanvas({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<ReturnType<typeof f3.createChart> | null>(null);
   const onGraphChangeRef = useRef(onGraphChange);
-  const skipNextReinitRef = useRef(false);
+  const skipNextDataSyncRef = useRef(false);
 
   onGraphChangeRef.current = onGraphChange;
 
@@ -69,31 +69,29 @@ export function FamilyTreeCanvas({
     () => toFamilyChartData(persons, marriages, childOrderMode),
     [persons, marriages, childOrderMode]
   );
+  const latestChartDataRef = useRef(chartData);
+  latestChartDataRef.current = chartData;
 
   useEffect(() => {
     setChildOrderMode(tree.childOrderMode);
   }, [tree.childOrderMode]);
 
+  // Mount/re-mount f3Chart only when mode changes (or view empty state toggles)
+  const isEmptyView = mode === "view" && chartData.length === 0;
+
   useEffect(() => {
-    if (skipNextReinitRef.current) {
-      skipNextReinitRef.current = false;
-      return;
-    }
-
     const container = containerRef.current;
-    if (!container) return;
-
-    if (mode === "view" && chartData.length === 0) {
-      container.innerHTML = "";
+    if (!container || isEmptyView) {
       chartRef.current = null;
       return;
     }
 
     container.innerHTML = "";
 
+    const data = latestChartDataRef.current;
     const initialData =
-      chartData.length > 0
-        ? chartData
+      data.length > 0
+        ? data
         : [
             {
               id: crypto.randomUUID(),
@@ -121,13 +119,6 @@ export function FamilyTreeCanvas({
     chartRef.current = f3Chart;
 
     f3Chart.setTransitionTime(400).setCardXSpacing(240).setCardYSpacing(150);
-
-    if (ancestryDepth !== null) {
-      f3Chart.setAncestryDepth(ancestryDepth);
-    }
-    if (progenyDepth !== null) {
-      f3Chart.setProgenyDepth(progenyDepth);
-    }
 
     const f3Card = f3Chart.setCardHtml();
     f3Card.setCardDisplay([
@@ -160,10 +151,10 @@ export function FamilyTreeCanvas({
             setSaving(true);
             setErrorMsg(null);
             const exported = f3EditTree.exportData() as unknown as FamilyChartDatum[];
-            skipNextReinitRef.current = true;
+            skipNextDataSyncRef.current = true;
             await handler(exported);
           } catch (err) {
-            skipNextReinitRef.current = false;
+            skipNextDataSyncRef.current = false;
             setErrorMsg(
               err instanceof Error ? err.message : "저장 중 오류가 발생했습니다."
             );
@@ -186,17 +177,30 @@ export function FamilyTreeCanvas({
       container.innerHTML = "";
       chartRef.current = null;
     };
-  }, [
-    chartData,
-    mode,
-    ancestryDepth,
-    progenyDepth,
-    tree.rootPersonId,
-    tree.bonKo,
-    tree.bonHanja,
-    tree.surnameKo,
-    tree.surnameHanja,
-  ]);
+  }, [mode, isEmptyView, tree.rootPersonId, tree.bonKo, tree.bonHanja, tree.surnameKo, tree.surnameHanja]);
+
+  // Sync external data changes (e.g. childOrderMode toggle) without tearing down chart
+  useEffect(() => {
+    const f3Chart = chartRef.current;
+    if (!f3Chart) return;
+    if (skipNextDataSyncRef.current) {
+      skipNextDataSyncRef.current = false;
+      return;
+    }
+    if (chartData.length > 0) {
+      f3Chart.updateData(chartData as unknown as f3.Data);
+      f3Chart.updateTree({});
+    }
+  }, [chartData]);
+
+  // Sync ancestry/progeny depth options without tearing down chart
+  useEffect(() => {
+    const f3Chart = chartRef.current;
+    if (!f3Chart) return;
+    f3Chart.setAncestryDepth(ancestryDepth ?? 100);
+    f3Chart.setProgenyDepth(progenyDepth ?? 100);
+    f3Chart.updateTree({});
+  }, [ancestryDepth, progenyDepth]);
 
   return (
     <div className="flex h-full flex-col">
@@ -267,7 +271,7 @@ export function FamilyTreeCanvas({
         </div>
       </div>
 
-      {mode === "view" && chartData.length === 0 ? (
+      {isEmptyView ? (
         <div className="flex flex-1 items-center justify-center bg-[var(--bg-page)] text-sm text-[var(--text-secondary)]">
           등록된 인물이 없습니다.
         </div>
