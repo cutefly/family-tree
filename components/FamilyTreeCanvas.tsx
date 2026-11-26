@@ -148,6 +148,14 @@ export function FamilyTreeCanvas({
         id: "motherId",
         placeholder: "선택 안 함",
         optionCreator: (datum: FamilyChartDatum & { _new_rel_data?: { rel_type: string; rel_id?: string; other_parent_id?: string } }) => {
+          if (
+            datum._new_rel_data &&
+            datum._new_rel_data.rel_type !== "son" &&
+            datum._new_rel_data.rel_type !== "daughter"
+          ) {
+            return [];
+          }
+
           const storeData = f3Chart.store.getData() as unknown as FamilyChartDatum[];
           const parentNodes = (datum.rels?.parents ?? [])
             .map((pid) => storeData.find((d) => d.id === pid))
@@ -215,8 +223,11 @@ export function FamilyTreeCanvas({
           const fieldEl = select?.closest<HTMLElement>(".f3-form-field");
           if (!select || !fieldEl) return;
 
-          // 1 placeholder ("선택 안 함") + 2+ mother candidates => options.length >= 3
-          if (select.options.length < 3) {
+          // 1 placeholder ("선택 안 함") + 1 mother => default to her and hide dropdown
+          if (select.options.length === 2) {
+            select.value = select.options[1].value;
+            fieldEl.style.display = "none";
+          } else if (select.options.length < 3) {
             fieldEl.style.display = "none";
           }
         })
