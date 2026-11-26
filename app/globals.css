@@ -88,3 +88,8 @@
   background-color: var(--bg-muted);
   color: var(--text-primary);
 }
+
+#FamilyChart .link {
+  stroke: var(--text-secondary);
+  stroke-width: 1.5px;
+}
