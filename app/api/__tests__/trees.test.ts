@@ -26,6 +26,7 @@ const mockPrisma = {
     createMany: vi.fn(),
     create: vi.fn(),
     delete: vi.fn(),
+    findMany: vi.fn(),
     findUnique: vi.fn(),
     findFirst: vi.fn(),
   },
@@ -161,6 +162,73 @@ describe("Trees & Share API routes", () => {
       { params: Promise.resolve({ treeId: "tree-b", personId: "victim-person" }) }
     );
     expect(res.status).toBe(404);
+    expect(mockPrisma.person.delete).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 when DELETE /persons/[personId] targets a non-leaf person with children", async () => {
+    mockGetCurrentUser.mockResolvedValue({ id: "user-a", email: "a@test.com", name: "A", role: "USER" });
+    mockPrisma.familyTree.findUnique.mockResolvedValue({
+      id: "tree-a",
+      ownerId: "user-a",
+      rootPersonId: null,
+    });
+    mockPrisma.treeMember.findUnique.mockResolvedValue({ role: "OWNER" });
+    mockPrisma.person.findUnique.mockResolvedValue({
+      id: "p1",
+      treeId: "tree-a",
+    });
+    mockPrisma.person.findMany.mockResolvedValue([
+      {
+        id: "p1",
+        treeId: "tree-a",
+        nameKo: "부모",
+        nameHanja: null,
+        surnameKo: null,
+        surnameHanja: null,
+        bonKo: null,
+        bonHanja: null,
+        gender: "MALE",
+        birthDate: null,
+        deathDate: null,
+        birthOrder: null,
+        memo: null,
+        fatherId: null,
+        motherId: null,
+        createdAt: new Date("2026-01-01T00:00:00Z"),
+        updatedAt: new Date("2026-01-01T00:00:00Z"),
+      },
+      {
+        id: "c1",
+        treeId: "tree-a",
+        nameKo: "자녀",
+        nameHanja: null,
+        surnameKo: null,
+        surnameHanja: null,
+        bonKo: null,
+        bonHanja: null,
+        gender: "MALE",
+        birthDate: null,
+        deathDate: null,
+        birthOrder: null,
+        memo: null,
+        fatherId: "p1",
+        motherId: null,
+        createdAt: new Date("2026-01-02T00:00:00Z"),
+        updatedAt: new Date("2026-01-02T00:00:00Z"),
+      },
+    ]);
+    mockPrisma.marriage.findMany.mockResolvedValue([]);
+
+    const { DELETE } = await import(
+      "@/app/api/trees/[treeId]/persons/[personId]/route"
+    );
+    const res = await DELETE(
+      new Request("http://localhost/api/trees/tree-a/persons/p1", {
+        method: "DELETE",
+      }),
+      { params: Promise.resolve({ treeId: "tree-a", personId: "p1" }) }
+    );
+    expect(res.status).toBe(400);
     expect(mockPrisma.person.delete).not.toHaveBeenCalled();
   });
 

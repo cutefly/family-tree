@@ -91,5 +91,7 @@
 - `components/FamilyTreeCanvas.tsx`:
   - 좌상단 플로팅 `보기 옵션` 토글 버튼(기본 접힘 `false`) + 활성 옵션 요약 배지
   - `family-chart` 편집 폼 내 `Close → Cancel → Submit` 버튼 순서 커스터마이징
+  - 비리프(중간) 노드 삭제 차단: `lib/family-graph.ts`의 `canDeletePersonInGraph()`로 자녀 존재 여부 및 삭제 시 연결 컴포넌트 분리(미연결 노드 발생) 여부를 검사해 마지막 노드가 아니면 삭제 불가 안내 모달 표시 (`DELETE /api/trees/[treeId]/persons/[personId]`에서도 동일 검증으로 `400` 차단)
+  - 직계 성씨·본관 자동 채움: 글로벌 성씨·본관 설정 시 편집 폼에 `가계도 기본 성씨·본관 사용` 체크박스를 제공하며, `shouldAutoFillTreeOrigin()`으로 부계 직계(`father`, `son`, `daughter`) 신규 추가 시에만 자동 채움(배우자·어머니·외손 제외)
   - `app/globals.css`에서 `#FamilyChart .f3-form-cont` `z-index: 30`으로 모바일 겹침 방지
 - `components/TreeSettingsModal.tsx`: 가계도 메타 설정 및 공개 공유(`isShared` 체크 후 **저장** 시 DB 반영, 토큰 재발급 시 `isShared: true` 함께 저장)

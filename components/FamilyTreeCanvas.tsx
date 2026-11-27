@@ -5,9 +5,12 @@ import * as f3 from "family-chart";
 import "family-chart/styles/family-chart.css";
 import type { ChildOrderMode, FamilyTree, Marriage, Person } from "@prisma/client";
 import {
+  canDeletePersonInGraph,
   formatPersonDisplayName,
+  shouldAutoFillTreeOrigin,
   toFamilyChartData,
   type FamilyChartDatum,
+  type NewRelDatum,
 } from "@/lib/family-graph";
 
 export interface FamilyTreeCanvasProps {
@@ -73,7 +76,8 @@ export function FamilyTreeCanvas({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{
     label: string;
-    onConfirm: () => void;
+    blockedReason?: string;
+    onConfirm?: () => void;
   } | null>(null);
 
   const chartData = useMemo(
@@ -234,7 +238,7 @@ export function FamilyTreeCanvas({
         ] as unknown as string[])
         .setEditFirst(true)
         .setCardClickOpen(f3Card)
-        .setOnFormCreation(({ cont }) => {
+        .setOnFormCreation(({ cont, form_creator }) => {
           const buttonsEl = cont.querySelector<HTMLElement>(".f3-form-buttons");
           const nativeCloseBtn = cont.querySelector<HTMLElement>(".f3-close-btn");
           if (
@@ -252,6 +256,113 @@ export function FamilyTreeCanvas({
             buttonsEl.prepend(closeBtn);
           }
 
+          const hasGlobalOrigin = Boolean(
+            tree.surnameKo || tree.surnameHanja || tree.bonKo || tree.bonHanja
+          );
+          const surnameKoInput = cont.querySelector<HTMLInputElement>(
+            'input[name="surnameKo"]'
+          );
+          const surnameHanjaInput = cont.querySelector<HTMLInputElement>(
+            'input[name="surnameHanja"]'
+          );
+          const bonKoInput = cont.querySelector<HTMLInputElement>(
+            'input[name="bonKo"]'
+          );
+          const bonHanjaInput = cont.querySelector<HTMLInputElement>(
+            'input[name="bonHanja"]'
+          );
+          const surnameFieldEl =
+            surnameKoInput?.closest<HTMLElement>(".f3-form-field");
+
+          if (
+            hasGlobalOrigin &&
+            surnameKoInput &&
+            surnameFieldEl &&
+            !cont.querySelector(".f3-origin-autofill")
+          ) {
+            const originInputs: Array<[HTMLInputElement | null, string]> = [
+              [surnameKoInput, tree.surnameKo ?? ""],
+              [surnameHanjaInput, tree.surnameHanja ?? ""],
+              [bonKoInput, tree.bonKo ?? ""],
+              [bonHanjaInput, tree.bonHanja ?? ""],
+            ];
+
+            const targetDatum = (
+              form_creator as unknown as { datum?: NewRelDatum }
+            )?.datum;
+            const storeData =
+              f3Chart.store.getData() as unknown as FamilyChartDatum[];
+            const shouldPrefill = shouldAutoFillTreeOrigin(
+              targetDatum,
+              storeData,
+              tree
+            );
+
+            const applyGlobalOrigin = (checked: boolean) => {
+              for (const [input, val] of originInputs) {
+                if (!input) continue;
+                input.value = checked ? val : "";
+              }
+            };
+
+            const isAllEmpty = originInputs.every(
+              ([input]) => !input || input.value === ""
+            );
+            if (shouldPrefill && isAllEmpty) {
+              applyGlobalOrigin(true);
+            }
+
+            const matchesGlobal = originInputs.every(
+              ([input, val]) => !input || input.value === val
+            );
+
+            const summaryParts = [
+              tree.bonKo ?? "",
+              tree.surnameKo ? `${tree.surnameKo}씨` : "",
+            ].filter(Boolean);
+            const summaryLabel =
+              summaryParts.length > 0
+                ? summaryParts.join(" ")
+                : "가계도 기본값";
+
+            const wrapper = document.createElement("div");
+            wrapper.className = "f3-origin-autofill";
+            wrapper.style.margin = "8px 0 4px";
+            wrapper.style.padding = "6px 8px";
+            wrapper.style.borderRadius = "6px";
+            wrapper.style.border = "1px solid var(--border-color, #d1d5db)";
+            wrapper.style.fontSize = "12px";
+
+            const labelEl = document.createElement("label");
+            labelEl.style.display = "flex";
+            labelEl.style.alignItems = "center";
+            labelEl.style.gap = "6px";
+            labelEl.style.cursor = "pointer";
+
+            const checkbox = document.createElement("input");
+            checkbox.type = "checkbox";
+            checkbox.checked = matchesGlobal;
+
+            const textSpan = document.createElement("span");
+            textSpan.textContent = `가계도 기본 성씨·본관 사용 (${summaryLabel})`;
+
+            checkbox.addEventListener("change", () => {
+              applyGlobalOrigin(checkbox.checked);
+            });
+
+            for (const [input] of originInputs) {
+              input?.addEventListener("input", () => {
+                checkbox.checked = originInputs.every(
+                  ([el, val]) => !el || el.value === val
+                );
+              });
+            }
+
+            labelEl.append(checkbox, textSpan);
+            wrapper.append(labelEl);
+            surnameFieldEl.parentElement?.insertBefore(wrapper, surnameFieldEl);
+          }
+
           const select = cont.querySelector<HTMLSelectElement>(
             'select[name="motherId"]'
           );
@@ -267,7 +378,8 @@ export function FamilyTreeCanvas({
           }
         })
         .setOnDelete((datum, deletePerson, postSubmit) => {
-          const data = (datum as unknown as FamilyChartDatum).data;
+          const targetDatum = datum as unknown as FamilyChartDatum;
+          const data = targetDatum.data;
           const { primary, secondary } = formatPersonDisplayName({
             nameKo: data?.nameKo || null,
             nameHanja: data?.nameHanja || null,
@@ -275,6 +387,17 @@ export function FamilyTreeCanvas({
             bonKo: data?.bonKo || null,
           });
           const label = secondary ? `${primary} (${secondary})` : primary;
+
+          const storeData = f3Chart.store.getData() as unknown as FamilyChartDatum[];
+          const check = canDeletePersonInGraph(targetDatum.id, storeData);
+          if (!check.deletable) {
+            setPendingDelete({
+              label,
+              blockedReason: check.reason,
+            });
+            return;
+          }
+
           setPendingDelete({
             label,
             onConfirm: () => {
@@ -544,33 +667,60 @@ export function FamilyTreeCanvas({
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
         >
           <div className="w-full max-w-sm rounded-xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-5 text-[var(--text-primary)] shadow-xl">
-            <h3 className="text-base font-semibold">인물 삭제 확인</h3>
-            <p className="mt-2 text-sm text-[var(--text-secondary)]">
-              <strong className="font-semibold text-[var(--text-primary)]">
-                {pendingDelete.label}
-              </strong>{" "}
-              항목을 삭제하시겠습니까?
-            </p>
-            <div className="mt-5 flex justify-end gap-2 text-sm">
-              <button
-                type="button"
-                onClick={() => setPendingDelete(null)}
-                className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-surface)] px-4 py-1.5 hover:bg-[var(--bg-muted)]"
-              >
-                취소
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const confirmFn = pendingDelete.onConfirm;
-                  setPendingDelete(null);
-                  confirmFn();
-                }}
-                className="rounded-lg bg-red-600 px-4 py-1.5 font-medium text-white hover:bg-red-700"
-              >
-                삭제
-              </button>
-            </div>
+            <h3 className="text-base font-semibold">
+              {pendingDelete.blockedReason ? "인물 삭제 불가" : "인물 삭제 확인"}
+            </h3>
+            {pendingDelete.blockedReason ? (
+              <>
+                <p className="mt-2 text-sm text-[var(--text-secondary)]">
+                  <strong className="font-semibold text-[var(--text-primary)]">
+                    {pendingDelete.label}
+                  </strong>{" "}
+                  항목은 삭제할 수 없습니다.
+                </p>
+                <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+                  {pendingDelete.blockedReason}
+                </p>
+                <div className="mt-5 flex justify-end text-sm">
+                  <button
+                    type="button"
+                    onClick={() => setPendingDelete(null)}
+                    className="rounded-lg bg-[var(--accent-primary,#2563eb)] px-4 py-1.5 font-medium text-white hover:opacity-90"
+                  >
+                    확인
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="mt-2 text-sm text-[var(--text-secondary)]">
+                  <strong className="font-semibold text-[var(--text-primary)]">
+                    {pendingDelete.label}
+                  </strong>{" "}
+                  항목을 삭제하시겠습니까?
+                </p>
+                <div className="mt-5 flex justify-end gap-2 text-sm">
+                  <button
+                    type="button"
+                    onClick={() => setPendingDelete(null)}
+                    className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-surface)] px-4 py-1.5 hover:bg-[var(--bg-muted)]"
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const confirmFn = pendingDelete.onConfirm;
+                      setPendingDelete(null);
+                      confirmFn?.();
+                    }}
+                    className="rounded-lg bg-red-600 px-4 py-1.5 font-medium text-white hover:bg-red-700"
+                  >
+                    삭제
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

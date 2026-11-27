@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { canDeletePersonInGraph, toFamilyChartData } from "@/lib/family-graph";
 import { prisma } from "@/lib/prisma";
 import { requireTreeAccess } from "@/lib/tree-auth";
 import {
@@ -110,6 +111,16 @@ export async function DELETE(_request: Request, { params }: Params) {
       { error: "인물을 찾을 수 없습니다." },
       { status: 404 }
     );
+  }
+
+  const [persons, marriages] = await Promise.all([
+    prisma.person.findMany({ where: { treeId } }),
+    prisma.marriage.findMany({ where: { treeId } }),
+  ]);
+  const chartData = toFamilyChartData(persons, marriages, "BY_ORDER");
+  const deleteCheck = canDeletePersonInGraph(personId, chartData);
+  if (!deleteCheck.deletable) {
+    return NextResponse.json({ error: deleteCheck.reason }, { status: 400 });
   }
 
   await prisma.$transaction(async (tx) => {

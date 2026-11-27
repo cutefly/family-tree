@@ -17,6 +17,9 @@
 4. **다이어그램 보기 옵션 및 편집 폼 UX**
    - `FamilyTreeCanvas.tsx` 상단의 보기 옵션(`상위 세대`, `하위 세대`, `자녀 나열`, `트리 방향`)은 좌상단 플로팅 토글로 분리했고 기본값은 접힘(`false`)입니다.
    - 모바일에서 편집 폼 상단 닫기 버튼이 보기 옵션 바에 가려지던 문제를 해결하기 위해 `#FamilyChart .f3-form-cont`에 `z-index: 30`을 적용하고, 폼 하단 버튼 영역을 `Close → Cancel → Submit` 순으로 배치했습니다.
+5. **인물 삭제 보호 및 직계 성씨·본관 자동 채움**
+   - 중간 레벨 삭제 시 미연결 노드가 발생하는 것을 방지하기 위해 리프 노드(자녀가 없고 삭제 시 그래프 단절이 발생하지 않는 노드)만 삭제를 허용하고, 불가 시 안내 모달 및 단일 삭제 API `400` 응답으로 차단합니다.
+   - 편집 폼에서 글로벌 성씨·본관이 설정된 경우 `가계도 기본 성씨·본관 사용` 체크박스를 표시하며, 부계 직계(`father`, `son`, `daughter`) 추가 시에만 자동 채우고 배우자·어머니·외손 입력 시에는 비워둡니다.
 
 ---
 
@@ -34,6 +37,9 @@
     - 최소/최대 허용 기간(예: 최소 1시간 ~ 최대 365일)
 
 ### 우선순위 중간/낮음 — 보안 및 코드 품질 개선
+- **시조(`rootPersonId`) 및 상위 숨기기 UI 개선**:
+  - `FamilyTree.rootPersonId`를 화면에서 선택/변경하는 UI 추가 (`PATCH /api/trees/[treeId]` API는 이미 구현됨)
+  - `FamilyTreeCanvas.tsx`의 `상위 세대` 보기 옵션에 `0대(상위 숨기기)` 추가 검토
 - **마지막 `OWNER` 보호 트랜잭션화**: `app/api/trees/[treeId]/members/route.ts` 및 `[userId]/route.ts`의 `count` + `update`/`delete`/`upsert`를 `prisma.$transaction`으로 묶어 동시성(TOCTOU) 경합 방지
 - **로그인 브루트포스 방어**: `POST /api/auth/login`에 실패 횟수 제한(Rate Limiting) 도입 검토
 - **Next.js 16 `middleware.ts` → `proxy.ts` 마이그레이션**: `next build` 시 출력되는 deprecation 안내에 맞춰 추후 `proxy.ts`로 전환 검토

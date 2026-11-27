@@ -271,3 +271,221 @@ export function fromFamilyChartData(nodes: FamilyChartDatum[]): {
 
   return { persons, marriages };
 }
+
+export type DeletePersonCheckResult =
+  | { deletable: true }
+  | { deletable: false; reason: string };
+
+function countConnectedComponents(nodes: FamilyChartDatum[]): number {
+  const nodeIds = new Set(nodes.map((n) => n.id));
+  const adj = new Map<string, Set<string>>();
+  for (const id of nodeIds) {
+    adj.set(id, new Set());
+  }
+
+  for (const node of nodes) {
+    const neighbors = [
+      ...(node.rels?.parents ?? []),
+      ...(node.rels?.children ?? []),
+      ...(node.rels?.spouses ?? []),
+    ];
+    for (const relId of neighbors) {
+      if (relId !== node.id && nodeIds.has(relId)) {
+        adj.get(node.id)!.add(relId);
+        adj.get(relId)!.add(node.id);
+      }
+    }
+  }
+
+  const visited = new Set<string>();
+  let components = 0;
+
+  for (const id of nodeIds) {
+    if (visited.has(id)) continue;
+    components += 1;
+    const queue = [id];
+    visited.add(id);
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      for (const next of adj.get(current) ?? []) {
+        if (!visited.has(next)) {
+          visited.add(next);
+          queue.push(next);
+        }
+      }
+    }
+  }
+
+  return components;
+}
+
+/**
+ * Verify whether removing `personId` is safe (i.e. it is a leaf node and
+ * removing it does not disconnect remaining nodes into separate components).
+ */
+export function canDeletePersonInGraph(
+  personId: string,
+  nodes: FamilyChartDatum[]
+): DeletePersonCheckResult {
+  const realNodes = nodes.filter(
+    (n) =>
+      n &&
+      typeof n.id === "string" &&
+      !n.unknown &&
+      !n.to_add &&
+      !(n as { _new_rel_data?: unknown })._new_rel_data
+  );
+
+  const realIdSet = new Set(realNodes.map((n) => n.id));
+  const target = realNodes.find((n) => n.id === personId);
+  if (!target) {
+    return { deletable: true };
+  }
+
+  const hasChild = (target.rels?.children ?? []).some(
+    (cid) => cid !== personId && realIdSet.has(cid)
+  );
+  if (hasChild) {
+    return {
+      deletable: false,
+      reason:
+        "마지막 노드가 아니므로 삭제할 수 없습니다. 하위(자녀) 인물부터 먼저 삭제해 주세요.",
+    };
+  }
+
+  const remainingNodes = realNodes.filter((n) => n.id !== personId);
+  if (remainingNodes.length <= 1) {
+    return { deletable: true };
+  }
+
+  const beforeComponents = countConnectedComponents(realNodes);
+  const afterComponents = countConnectedComponents(remainingNodes);
+  if (afterComponents > beforeComponents) {
+    return {
+      deletable: false,
+      reason:
+        "마지막 노드가 아니므로 삭제할 수 없습니다. 삭제 시 연결이 끊어지는 미연결 인물이 발생합니다.",
+    };
+  }
+
+  return { deletable: true };
+}
+
+export interface TreeOriginDefaults {
+  surnameKo?: string | null;
+  surnameHanja?: string | null;
+  bonKo?: string | null;
+  bonHanja?: string | null;
+}
+
+export type NewRelDatum = FamilyChartDatum & {
+  _new_rel_data?: {
+    rel_type?: string;
+    rel_id?: string;
+    other_parent_id?: string;
+  };
+};
+
+function hasOriginValues(origin: TreeOriginDefaults): boolean {
+  return Boolean(
+    cleanStr(origin.surnameKo) ||
+      cleanStr(origin.surnameHanja) ||
+      cleanStr(origin.bonKo) ||
+      cleanStr(origin.bonHanja)
+  );
+}
+
+function nodeHasOriginInfo(node: FamilyChartDatum): boolean {
+  return Boolean(cleanStr(node.data?.surnameKo) || cleanStr(node.data?.bonKo));
+}
+
+function personMatchesTreeOrigin(
+  node: FamilyChartDatum,
+  origin: TreeOriginDefaults
+): boolean {
+  const treeSurname = cleanStr(origin.surnameKo);
+  const treeBon = cleanStr(origin.bonKo);
+  const nodeSurname = cleanStr(node.data?.surnameKo);
+  const nodeBon = cleanStr(node.data?.bonKo);
+
+  if (treeSurname) {
+    if (nodeSurname !== treeSurname) return false;
+    if (treeBon && nodeBon && nodeBon !== treeBon) return false;
+    return true;
+  }
+  if (treeBon) {
+    return nodeBon === treeBon;
+  }
+  return false;
+}
+
+/**
+ * Determine whether a newly created relative form should pre-fill the tree's
+ * global surname/clan-origin (`surnameKo`, `surnameHanja`, `bonKo`, `bonHanja`).
+ * Excludes spouses, mothers, and maternal-line descendants (외손).
+ */
+export function shouldAutoFillTreeOrigin(
+  datum: NewRelDatum | undefined,
+  nodes: FamilyChartDatum[],
+  origin: TreeOriginDefaults
+): boolean {
+  if (!datum || !hasOriginValues(origin)) return false;
+  const newRel = datum._new_rel_data;
+  if (!newRel) return false;
+
+  const relType = newRel.rel_type;
+  if (relType === "spouse" || relType === "mother") {
+    return false;
+  }
+
+  const realNodes = nodes.filter(
+    (n) =>
+      n &&
+      typeof n.id === "string" &&
+      !n.unknown &&
+      !n.to_add &&
+      !(n as { _new_rel_data?: unknown })._new_rel_data
+  );
+
+  const relParent = newRel.rel_id
+    ? realNodes.find((n) => n.id === newRel.rel_id)
+    : undefined;
+
+  if (relType === "father") {
+    if (!relParent) return true;
+    return !nodeHasOriginInfo(relParent) || personMatchesTreeOrigin(relParent, origin);
+  }
+
+  if (relType === "son" || relType === "daughter") {
+    if (!relParent) return false;
+
+    const otherParent = newRel.other_parent_id
+      ? realNodes.find((n) => n.id === newRel.other_parent_id)
+      : undefined;
+
+    let father: FamilyChartDatum | undefined;
+    if (relParent.data?.gender !== "F") {
+      father = relParent;
+    } else if (otherParent && otherParent.data?.gender !== "F") {
+      father = otherParent;
+    } else if (!newRel.other_parent_id) {
+      const spouseCandidates = (relParent.rels?.spouses ?? [])
+        .map((sid) => realNodes.find((n) => n.id === sid))
+        .filter((n): n is FamilyChartDatum => Boolean(n && n.data?.gender !== "F"));
+      if (spouseCandidates.length === 1) {
+        father = spouseCandidates[0];
+      }
+    }
+
+    if (!father) return false;
+
+    if (nodeHasOriginInfo(father)) {
+      return personMatchesTreeOrigin(father, origin);
+    }
+
+    // Father has no surname/bon yet: allow auto-fill only when adding directly from the father
+    return relParent.id === father.id;
+  }
+
+  return false;
+}

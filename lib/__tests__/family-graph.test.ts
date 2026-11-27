@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { Marriage, Person } from "@prisma/client";
 import {
+  canDeletePersonInGraph,
   formatPersonDisplayName,
   fromFamilyChartData,
+  shouldAutoFillTreeOrigin,
   sortChildren,
   toFamilyChartData,
+  type NewRelDatum,
 } from "@/lib/family-graph";
 
 function makePerson(overrides: Partial<Person> & { id: string }): Person {
@@ -202,5 +205,192 @@ describe("toFamilyChartData & fromFamilyChartData", () => {
     const synced = fromFamilyChartData([...nodes, unknownNode]);
     expect(synced.persons).toHaveLength(1);
     expect(synced.persons[0].gender).toBe("MALE");
+  });
+});
+
+describe("canDeletePersonInGraph", () => {
+  it("blocks deleting a parent who still has children", () => {
+    const parent = makePerson({ id: "p1", nameKo: "부모", gender: "MALE" });
+    const child = makePerson({ id: "c1", nameKo: "자녀", fatherId: "p1" });
+    const nodes = toFamilyChartData([parent, child], [], "BY_ORDER");
+
+    expect(canDeletePersonInGraph("p1", nodes)).toEqual({
+      deletable: false,
+      reason: expect.stringContaining("마지막 노드가 아니므로"),
+    });
+    expect(canDeletePersonInGraph("c1", nodes)).toEqual({ deletable: true });
+  });
+
+  it("blocks deleting an intermediate node whose removal disconnects a spouse", () => {
+    const grandParent = makePerson({ id: "gp", nameKo: "조부", gender: "MALE" });
+    const son = makePerson({ id: "son", nameKo: "아들", gender: "MALE", fatherId: "gp" });
+    const spouse = makePerson({ id: "sp", nameKo: "며느리", gender: "FEMALE" });
+    const marriage: Marriage = {
+      id: "mar-1",
+      treeId: "tree-1",
+      person1Id: "son",
+      person2Id: "sp",
+      createdAt: new Date("2026-01-01T00:00:00Z"),
+    };
+    const nodes = toFamilyChartData([grandParent, son, spouse], [marriage], "BY_ORDER");
+
+    // Removing son disconnects spouse from grandParent
+    expect(canDeletePersonInGraph("son", nodes)).toEqual({
+      deletable: false,
+      reason: expect.stringContaining("미연결"),
+    });
+    // Spouse is a leaf node and can be deleted safely
+    expect(canDeletePersonInGraph("sp", nodes)).toEqual({ deletable: true });
+  });
+
+  it("allows deleting the last remaining person and ignores unknown/to_add nodes", () => {
+    const only = makePerson({ id: "only", nameKo: "시조" });
+    const nodes = toFamilyChartData([only], [], "BY_ORDER");
+    const dummy = { ...nodes[0], id: "dummy-add", to_add: true };
+    nodes[0].rels.children.push("dummy-add");
+
+    expect(canDeletePersonInGraph("only", [...nodes, dummy])).toEqual({
+      deletable: true,
+    });
+  });
+});
+
+describe("shouldAutoFillTreeOrigin", () => {
+  const origin = {
+    surnameKo: "김",
+    surnameHanja: "金",
+    bonKo: "김해",
+    bonHanja: "金海",
+  };
+
+  it("returns true for paternal-line children and father, false for spouse and mother", () => {
+    const father = makePerson({
+      id: "f1",
+      nameKo: "김철수",
+      surnameKo: "김",
+      bonKo: "김해",
+      gender: "MALE",
+    });
+    const nodes = toFamilyChartData([father], [], "BY_ORDER");
+
+    const newSon: NewRelDatum = {
+      ...nodes[0],
+      id: "new-son",
+      _new_rel_data: { rel_type: "son", rel_id: "f1" },
+    };
+    const newSpouse: NewRelDatum = {
+      ...nodes[0],
+      id: "new-spouse",
+      _new_rel_data: { rel_type: "spouse", rel_id: "f1" },
+    };
+    const newMother: NewRelDatum = {
+      ...nodes[0],
+      id: "new-mother",
+      _new_rel_data: { rel_type: "mother", rel_id: "f1" },
+    };
+    const newFather: NewRelDatum = {
+      ...nodes[0],
+      id: "new-father",
+      _new_rel_data: { rel_type: "father", rel_id: "f1" },
+    };
+
+    expect(shouldAutoFillTreeOrigin(newSon, nodes, origin)).toBe(true);
+    expect(shouldAutoFillTreeOrigin(newFather, nodes, origin)).toBe(true);
+    expect(shouldAutoFillTreeOrigin(newSpouse, nodes, origin)).toBe(false);
+    expect(shouldAutoFillTreeOrigin(newMother, nodes, origin)).toBe(false);
+  });
+
+  it("returns true when adding a child from daughter-in-law whose husband matches tree origin", () => {
+    const husband = makePerson({
+      id: "h1",
+      nameKo: "김영수",
+      surnameKo: "김",
+      bonKo: "김해",
+      gender: "MALE",
+    });
+    const wife = makePerson({
+      id: "w1",
+      nameKo: "이영희",
+      surnameKo: "이",
+      bonKo: "전주",
+      gender: "FEMALE",
+    });
+    const marriage: Marriage = {
+      id: "m1",
+      treeId: "tree-1",
+      person1Id: "h1",
+      person2Id: "w1",
+      createdAt: new Date("2026-01-01T00:00:00Z"),
+    };
+    const nodes = toFamilyChartData([husband, wife], [marriage], "BY_ORDER");
+
+    const childFromMother: NewRelDatum = {
+      ...nodes[0],
+      id: "new-child",
+      _new_rel_data: { rel_type: "son", rel_id: "w1", other_parent_id: "h1" },
+    };
+
+    expect(shouldAutoFillTreeOrigin(childFromMother, nodes, origin)).toBe(true);
+  });
+
+  it("returns false for maternal-line grandchildren (외손)", () => {
+    const daughter = makePerson({
+      id: "d1",
+      nameKo: "김민지",
+      surnameKo: "김",
+      bonKo: "김해",
+      gender: "FEMALE",
+    });
+    const sonInLaw = makePerson({
+      id: "sil1",
+      nameKo: "박준호",
+      surnameKo: "박",
+      bonKo: "밀양",
+      gender: "MALE",
+    });
+    const marriage: Marriage = {
+      id: "m1",
+      treeId: "tree-1",
+      person1Id: "d1",
+      person2Id: "sil1",
+      createdAt: new Date("2026-01-01T00:00:00Z"),
+    };
+    const nodes = toFamilyChartData([daughter, sonInLaw], [marriage], "BY_ORDER");
+
+    const maternalGrandchild: NewRelDatum = {
+      ...nodes[0],
+      id: "new-gc",
+      _new_rel_data: { rel_type: "daughter", rel_id: "d1", other_parent_id: "sil1" },
+    };
+    const grandchildFromFather: NewRelDatum = {
+      ...nodes[0],
+      id: "new-gc-2",
+      _new_rel_data: { rel_type: "son", rel_id: "sil1" },
+    };
+
+    expect(shouldAutoFillTreeOrigin(maternalGrandchild, nodes, origin)).toBe(false);
+    expect(shouldAutoFillTreeOrigin(grandchildFromFather, nodes, origin)).toBe(false);
+
+    // Also returns false when adding a child from a daughter with no spouse recorded
+    const singleDaughterNodes = toFamilyChartData([daughter], [], "BY_ORDER");
+    const singleDaughterChild: NewRelDatum = {
+      ...singleDaughterNodes[0],
+      id: "new-gc-3",
+      _new_rel_data: { rel_type: "son", rel_id: "d1" },
+    };
+    expect(shouldAutoFillTreeOrigin(singleDaughterChild, singleDaughterNodes, origin)).toBe(false);
+  });
+
+  it("returns false when origin defaults are empty or editing an existing person", () => {
+    const father = makePerson({ id: "f1", nameKo: "김철수", gender: "MALE" });
+    const nodes = toFamilyChartData([father], [], "BY_ORDER");
+    const newSon: NewRelDatum = {
+      ...nodes[0],
+      id: "new-son",
+      _new_rel_data: { rel_type: "son", rel_id: "f1" },
+    };
+
+    expect(shouldAutoFillTreeOrigin(newSon, nodes, {})).toBe(false);
+    expect(shouldAutoFillTreeOrigin(nodes[0], nodes, origin)).toBe(false);
   });
 });
